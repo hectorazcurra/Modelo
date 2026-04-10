@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+model Projeto {
+  id           String    @id @default(cuid())
+  nome         String
+  descricao    String?   @db.Text
+  pdfNome      String?
+  pdfTexto     String?   @db.LongText
+  status       Status    @default(ANALISE)
+  aiProvider   String    @default("claude")
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+
+  mensagens Mensagem[]
+  orcamento Orcamento?
+}
+
+model Mensagem {
+  id        String   @id @default(cuid())
+  projetoId String
+  role      String
+  conteudo  String   @db.Text
+  criadoEm  DateTime @default(now())
+
+  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+}
+
+model Orcamento {
+  id           String   @id @default(cuid())
+  projetoId    String   @unique
+  dados        Json
+  versao       Int      @default(1)
+  aprovado     Boolean  @default(false)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  projeto Projeto @relation(fields: [projetoId], references: [id], onDelete: Cascade)
+}
+
+model BaseConhecimento {
+  id       String   @id @default(cuid())
+  tipo     String
+  titulo   String
+  dados    Json
+  criadoEm DateTime @default(now())
+}
+
+enum Status {
+  ANALISE
+  ORCAMENTO
+  REVISAO
+  APROVADO
+}
