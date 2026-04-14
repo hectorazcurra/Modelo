@@ -17,9 +17,14 @@ export default function LandingPage() {
           <p className="text-sm text-[#A3A3A3]">
             © 2025 Metodo Engenharia. Plataforma de orçamentos para obras públicas.
           </p>
-          <p className="text-xs text-[#666666]">
-            Desenvolvido por Nato Digital
-          </p>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-[#666666]">Desenvolvido por</span>
+            <img
+              src="/nato-digital-logo.png"
+              alt="Nato Digital"
+              className="h-6 w-auto opacity-80 hover:opacity-100 transition-opacity"
+            />
+          </div>
         </div>
       </footer>
     </div>
