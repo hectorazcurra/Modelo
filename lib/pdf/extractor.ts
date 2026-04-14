@@ -1,11 +1,10 @@
-import pdfParse from 'pdf-parse'
-
 export interface PDFExtractionResult {
   text: string
   numPages: number
 }
 
 export async function extractPDFText(buffer: Buffer): Promise<PDFExtractionResult> {
+  const { default: pdfParse } = await import('pdf-parse')
   const data = await pdfParse(buffer)
   return {
     text: data.text,
