@@ -15,7 +15,7 @@ export default function LandingPage() {
       <footer className="border-t border-[#2A2A2A] py-8 px-6">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-[#A3A3A3]">
-            © 2025 Modelo. Plataforma de orçamentos para obras públicas.
+            © 2025 Metodo Engenharia. Plataforma de orçamentos para obras públicas.
           </p>
           <p className="text-xs text-[#666666]">
             Desenvolvido por Nato Digital

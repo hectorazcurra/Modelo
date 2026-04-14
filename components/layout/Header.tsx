@@ -10,7 +10,7 @@ export function Header() {
           <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center">
             <Building2 className="w-4 h-4 text-black" strokeWidth={2.5} />
           </div>
-          <span className="font-bold text-lg tracking-tight">Modelo</span>
+          <span className="font-bold text-lg tracking-tight">Metodo Engenharia</span>
         </Link>
 
         <nav className="hidden md:flex items-center gap-6">

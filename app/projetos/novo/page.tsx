@@ -11,7 +11,7 @@ export default function NovoProjeto() {
             <div className="w-8 h-8 rounded-lg bg-amber-500 flex items-center justify-center">
               <Building2 className="w-4.5 h-4.5 text-black" strokeWidth={2.5} />
             </div>
-            <span className="font-bold text-lg tracking-tight">Modelo</span>
+            <span className="font-bold text-lg tracking-tight">Metodo Engenharia</span>
           </Link>
           <span className="text-[#2A2A2A]">/</span>
           <Link href="/dashboard" className="flex items-center gap-1.5 text-sm text-[#A3A3A3] hover:text-[#FAFAFA] transition-colors">
