@@ -1,4 +1,4 @@
-import { PDFParse } from 'pdf-parse'
+import pdfParse from 'pdf-parse'
 
 export interface PDFExtractionResult {
   text: string
@@ -6,14 +6,10 @@ export interface PDFExtractionResult {
 }
 
 export async function extractPDFText(buffer: Buffer): Promise<PDFExtractionResult> {
-  const uint8 = new Uint8Array(buffer.buffer, buffer.byteOffset, buffer.byteLength)
-  const parser = new PDFParse({ data: uint8 })
-  const [info, textResult] = await Promise.all([parser.getInfo(), parser.getText()])
-  await parser.destroy()
-
+  const data = await pdfParse(buffer)
   return {
-    text: textResult.text,
-    numPages: info.pages?.length ?? 0,
+    text: data.text,
+    numPages: data.numpages,
   }
 }
 
