@@ -40,7 +40,7 @@ export default async function DashboardPage() {
           </Link>
           <Button href="/projetos/novo" size="sm">
             <Plus className="w-4 h-4" />
-            Novo Projeto
+            Nuevo Proyecto
           </Button>
         </div>
       </header>
@@ -49,7 +49,7 @@ export default async function DashboardPage() {
         {/* Title */}
         <div className="mb-8">
           <h1 className="text-2xl font-bold mb-1">Dashboard</h1>
-          <p className="text-[#A3A3A3] text-sm">Gerencie seus projetos e orçamentos</p>
+          <p className="text-[#A3A3A3] text-sm">Gestione sus proyectos y presupuestos</p>
         </div>
 
         {/* Stats */}
@@ -57,19 +57,19 @@ export default async function DashboardPage() {
           <Card>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold text-amber-400">{projetos.length}</div>
-              <div className="text-xs text-[#A3A3A3] mt-0.5">Total de Projetos</div>
+              <div className="text-xs text-[#A3A3A3] mt-0.5">Total de Proyectos</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold text-blue-400">{totalOrcamentos}</div>
-              <div className="text-xs text-[#A3A3A3] mt-0.5">Com Orçamento</div>
+              <div className="text-xs text-[#A3A3A3] mt-0.5">Con Presupuesto</div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold text-green-400">{totalAprovados}</div>
-              <div className="text-xs text-[#A3A3A3] mt-0.5">Aprovados</div>
+              <div className="text-xs text-[#A3A3A3] mt-0.5">Aprobados</div>
             </CardContent>
           </Card>
           <Card>
@@ -86,13 +86,13 @@ export default async function DashboardPage() {
         {projetos.length === 0 ? (
           <div className="text-center py-20 border border-dashed border-[#2A2A2A] rounded-xl">
             <FileText className="w-10 h-10 text-[#A3A3A3] mx-auto mb-4" />
-            <h3 className="font-medium text-[#FAFAFA] mb-2">Nenhum projeto ainda</h3>
+            <h3 className="font-medium text-[#FAFAFA] mb-2">Ningún proyecto aún</h3>
             <p className="text-sm text-[#A3A3A3] mb-6">
-              Crie seu primeiro projeto e faça upload de um edital de obra
+              Cree su primer proyecto y suba un pliego de obra
             </p>
             <Button href="/projetos/novo">
               <Plus className="w-4 h-4" />
-              Criar Projeto
+              Crear Proyecto
             </Button>
           </div>
         ) : (
@@ -118,8 +118,8 @@ export default async function DashboardPage() {
                         </Badge>
                       </div>
                       <div className="text-xs text-[#A3A3A3] flex items-center gap-3">
-                        <span>Atualizado {formatDate(projeto.atualizadoEm)}</span>
-                        <span>{projeto._count.mensagens} mensagens</span>
+                        <span>Actualizado {formatDate(projeto.atualizadoEm)}</span>
+                        <span>{projeto._count.mensagens} mensajes</span>
                         {projeto.pdfNome && (
                           <span className="text-amber-400/70">{projeto.pdfNome}</span>
                         )}
@@ -132,7 +132,7 @@ export default async function DashboardPage() {
                           {formatCurrency(dados.totalGeral)}
                         </div>
                       ) : (
-                        <div className="text-xs text-[#666666]">Sem orçamento</div>
+                        <div className="text-xs text-[#666666]">Sin presupuesto</div>
                       )}
                       <div className="text-xs text-[#A3A3A3]">
                         {projeto.aiProvider === 'claude' ? 'Claude' : 'GPT-4o'}

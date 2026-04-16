@@ -18,11 +18,11 @@ export function Header() {
             Dashboard
           </Link>
           <Link href="/projetos/novo" className="text-sm text-[#A3A3A3] hover:text-[#FAFAFA] transition-colors">
-            Novo Projeto
+            Nuevo Proyecto
           </Link>
         </nav>
 
-        <Button href="/dashboard" size="sm">Acessar</Button>
+        <Button href="/dashboard" size="sm">Acceder</Button>
       </div>
     </header>
   )

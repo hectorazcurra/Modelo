@@ -23,10 +23,10 @@ export function formatDate(date: Date | string): string {
 
 export function statusLabel(status: StatusProjeto): string {
   const labels: Record<StatusProjeto, string> = {
-    ANALISE: 'Em Análise',
-    ORCAMENTO: 'Orçamento',
-    REVISAO: 'Em Revisão',
-    APROVADO: 'Aprovado',
+    ANALISE: 'En Análisis',
+    ORCAMENTO: 'Presupuesto',
+    REVISAO: 'En Revisión',
+    APROVADO: 'Aprobado',
   }
   return labels[status]
 }

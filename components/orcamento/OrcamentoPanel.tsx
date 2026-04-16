@@ -19,9 +19,9 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
         <div className="w-12 h-12 rounded-xl bg-[#1A1A1A] border border-[#2A2A2A] flex items-center justify-center mb-4">
           <FileText className="w-6 h-6 text-[#A3A3A3]" />
         </div>
-        <h3 className="font-medium text-[#FAFAFA] mb-2">Orçamento não gerado</h3>
+        <h3 className="font-medium text-[#FAFAFA] mb-2">Presupuesto no generado</h3>
         <p className="text-sm text-[#A3A3A3] max-w-xs">
-          Inicie o chat com a IA para analisar o edital e gerar o orçamento automaticamente
+          Inicie el chat con la IA para analizar el pliego y generar el presupuesto automáticamente
         </p>
       </div>
     )
@@ -33,14 +33,14 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
         {/* Header do orçamento */}
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="font-bold text-[#FAFAFA]">Orçamento</h2>
-            <p className="text-xs text-[#A3A3A3]">Versão {versao}</p>
+            <h2 className="font-bold text-[#FAFAFA]">Presupuesto</h2>
+            <p className="text-xs text-[#A3A3A3]">Versión {versao}</p>
           </div>
           <div className="flex items-center gap-2">
             {aprovado ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-green-500/30 bg-green-500/10 px-3 py-1 text-xs text-green-400">
                 <CheckCircle2 className="w-3 h-3" />
-                Aprovado
+                Aprobado
               </span>
             ) : (
               <button
@@ -48,7 +48,7 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
                 className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-400 hover:bg-amber-500/15 transition-colors"
               >
                 <CheckCircle2 className="w-3 h-3" />
-                Aprovar
+                Aprobar
               </button>
             )}
           </div>
@@ -59,7 +59,7 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
           <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-[#A3A3A3] mb-0.5">Total Geral</div>
+                <div className="text-xs text-[#A3A3A3] mb-0.5">Total General</div>
                 <div className="text-2xl font-bold text-amber-400">
                   {formatCurrency(dados.totalGeral)}
                 </div>
@@ -77,23 +77,23 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
         )}
 
         {/* Resumo */}
-        <Section title="Resumo Executivo" icon={<FileText className="w-4 h-4" />} defaultOpen>
+        <Section title="Resumen Ejecutivo" icon={<FileText className="w-4 h-4" />} defaultOpen>
           <dl className="space-y-2 text-sm">
             {dados.resumo.numeroEdital && (
-              <InfoRow label="Edital" value={dados.resumo.numeroEdital} />
+              <InfoRow label="Pliego" value={dados.resumo.numeroEdital} />
             )}
             <InfoRow label="Objeto" value={dados.resumo.objeto} />
-            {dados.resumo.local && <InfoRow label="Local" value={dados.resumo.local} />}
-            {dados.resumo.prazo && <InfoRow label="Prazo" value={dados.resumo.prazo} />}
+            {dados.resumo.local && <InfoRow label="Lugar" value={dados.resumo.local} />}
+            {dados.resumo.prazo && <InfoRow label="Plazo" value={dados.resumo.prazo} />}
             {dados.resumo.responsavel && (
-              <InfoRow label="Responsável" value={dados.resumo.responsavel} />
+              <InfoRow label="Responsable" value={dados.resumo.responsavel} />
             )}
           </dl>
         </Section>
 
         {/* Escopo */}
         {dados.escopo.length > 0 && (
-          <Section title="Escopo dos Serviços" icon={<TrendingUp className="w-4 h-4" />}>
+          <Section title="Alcance de los Servicios" icon={<TrendingUp className="w-4 h-4" />}>
             <ul className="space-y-1">
               {dados.escopo.map((item, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-[#A3A3A3]">
@@ -107,7 +107,7 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
 
         {/* Itens de custo */}
         {dados.itens.length > 0 && (
-          <Section title="Itens de Custo" icon={<TrendingUp className="w-4 h-4" />}>
+          <Section title="Ítems de Costo" icon={<TrendingUp className="w-4 h-4" />}>
             <div className="space-y-3">
               {/* Group by category */}
               {groupByCategory(dados.itens).map(([cat, items]) => (
@@ -135,7 +135,7 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
               ))}
 
               <div className="flex justify-between pt-2 border-t border-[#2A2A2A]">
-                <span className="text-sm font-semibold text-[#FAFAFA]">Total Materiais</span>
+                <span className="text-sm font-semibold text-[#FAFAFA]">Total Materiales</span>
                 <span className="text-sm font-bold text-amber-400">
                   {formatCurrency(dados.totalMateriais || dados.itens.reduce((a, i) => a + i.total, 0))}
                 </span>
@@ -146,13 +146,13 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
 
         {/* Mão de obra */}
         {dados.maoDeObra.length > 0 && (
-          <Section title="Mão de Obra" icon={<Users className="w-4 h-4" />}>
+          <Section title="Mano de Obra" icon={<Users className="w-4 h-4" />}>
             <div className="space-y-1">
               {dados.maoDeObra.map((item, i) => (
                 <MaoDeObraRow key={i} item={item} />
               ))}
               <div className="flex justify-between pt-2 border-t border-[#2A2A2A]">
-                <span className="text-sm font-semibold text-[#FAFAFA]">Total Mão de Obra</span>
+                <span className="text-sm font-semibold text-[#FAFAFA]">Total Mano de Obra</span>
                 <span className="text-sm font-bold text-amber-400">
                   {formatCurrency(dados.totalMaoDeObra || dados.maoDeObra.reduce((a, i) => a + i.total, 0))}
                 </span>
@@ -174,7 +174,7 @@ export function OrcamentoPanel({ dados, versao, aprovado, onAprovar }: Orcamento
 
         {/* Observações */}
         {dados.observacoes && (
-          <Section title="Observações">
+          <Section title="Observaciones">
             <p className="text-sm text-[#A3A3A3] leading-relaxed">{dados.observacoes}</p>
           </Section>
         )}

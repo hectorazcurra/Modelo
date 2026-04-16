@@ -36,11 +36,11 @@ export function ChatPanel({
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
               <Bot className="w-6 h-6 text-amber-400" />
             </div>
-            <h3 className="font-medium text-[#FAFAFA] mb-2">Assistente de Orçamentos</h3>
+            <h3 className="font-medium text-[#FAFAFA] mb-2">Asistente de Presupuestos</h3>
             <p className="text-sm text-[#A3A3A3] mb-6 max-w-xs">
               {hasPdf
-                ? 'O edital foi carregado. Clique em "Analisar Edital" para começar a análise com IA.'
-                : 'Faça upload de um edital PDF ou descreva o projeto para gerar o orçamento.'}
+                ? 'El pliego ha sido cargado. Haga clic en "Analizar Pliego" para comenzar el análisis con IA.'
+                : 'Suba un pliego en PDF o describa el proyecto para generar el presupuesto.'}
             </p>
             {hasPdf && (
               <button
@@ -49,7 +49,7 @@ export function ChatPanel({
                 className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/15 transition-colors disabled:opacity-50"
               >
                 <Bot className="w-4 h-4" />
-                Analisar Edital com IA
+                Analizar Pliego con IA
               </button>
             )}
           </div>
