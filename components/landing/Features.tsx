@@ -3,39 +3,39 @@ import { FileSearch, Brain, LayoutPanelLeft, TrendingUp, Clock, CheckCircle } fr
 const features = [
   {
     icon: FileSearch,
-    title: 'Importación de Pliegos',
+    title: 'Importação de Editais',
     description:
-      'Suba pliegos de obras públicas en PDF. La IA extrae automáticamente todos los requisitos, especificaciones y condiciones.',
+      'Faça upload de editais de obras públicas em PDF. A IA extrai automaticamente todos os requisitos, especificações e condições.',
   },
   {
     icon: Brain,
-    title: 'Análisis con IA',
+    title: 'Análise por IA',
     description:
-      'Claude o GPT-4o analizan el pliego, comparan con obras anteriores y calculan costos basados en tablas de precios y composiciones propias.',
+      'Claude ou GPT-4o analisam o edital, comparam com obras anteriores e calculam custos baseados em tabelas SINAPI e composições próprias.',
   },
   {
     icon: LayoutPanelLeft,
-    title: 'Interfaz Split-Screen',
+    title: 'Interface Split-Screen',
     description:
-      'Chat con la IA en el panel izquierdo mientras el presupuesto se actualiza en tiempo real en el panel derecho. Interacción natural y eficiente.',
+      'Chat com a IA no painel esquerdo enquanto o orçamento é atualizado em tempo real no painel direito. Interação natural e eficiente.',
   },
   {
     icon: TrendingUp,
-    title: 'Base de Conocimiento',
+    title: 'Base de Conhecimento',
     description:
-      'Alimentada por proyectos anteriores de la empresa. La IA aprende del historial para hacer estimaciones cada vez más precisas.',
+      'Alimentada por projetos anteriores da empresa. A IA aprende com o histórico para fazer estimativas cada vez mais precisas.',
   },
   {
     icon: Clock,
     title: 'Cronograma Automático',
     description:
-      'Generación automática del cronograma físico-financiero con fases, porcentajes y fechas basados en el plazo del pliego.',
+      'Geração automática do cronograma físico-financeiro com fases, percentuais e datas baseados no prazo do edital.',
   },
   {
     icon: CheckCircle,
-    title: 'Aprobación y Exportación',
+    title: 'Aprovação e Exportação',
     description:
-      'Flujo de revisión y aprobación del presupuesto. Exportación en PDF profesional listo para presentar en la licitación.',
+      'Fluxo de revisão e aprovação do orçamento. Exportação em PDF profissional pronto para submissão na licitação.',
   },
 ]
 
@@ -45,11 +45,11 @@ export function Features() {
       <div className="max-w-5xl mx-auto">
         <div className="text-center mb-14">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
-            Todo lo que necesitas para{' '}
-            <span className="text-amber-400">ganar licitaciones</span>
+            Tudo que você precisa para{' '}
+            <span className="text-amber-400">vencer licitações</span>
           </h2>
           <p className="text-[#A3A3A3] text-lg max-w-xl mx-auto">
-            Desde la lectura del pliego hasta la propuesta final, en una sola plataforma.
+            Da leitura do edital à proposta final, em uma única plataforma.
           </p>
         </div>
 

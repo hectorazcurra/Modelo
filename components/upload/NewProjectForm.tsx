@@ -25,14 +25,14 @@ export function NewProjectForm() {
     if (dropped?.type === 'application/pdf') {
       setFile(dropped)
     } else {
-      setError('Solo se aceptan archivos PDF')
+      setError('Apenas arquivos PDF são aceitos')
     }
   }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!nome.trim()) {
-      setError('El nombre del proyecto es obligatorio')
+      setError('Nome do projeto é obrigatório')
       return
     }
     setLoading(true)
@@ -46,7 +46,7 @@ export function NewProjectForm() {
         body: JSON.stringify({ nome, descricao, aiProvider }),
       })
 
-      if (!res.ok) throw new Error('Error al crear el proyecto')
+      if (!res.ok) throw new Error('Erro ao criar projeto')
       const projeto = await res.json()
 
       // Upload PDF if provided
@@ -60,7 +60,7 @@ export function NewProjectForm() {
           body: formData,
         })
 
-        if (!uploadRes.ok) throw new Error('Error al subir el PDF')
+        if (!uploadRes.ok) throw new Error('Erro ao fazer upload do PDF')
       }
 
       router.push(`/projetos/${projeto.id}`)
@@ -82,13 +82,13 @@ export function NewProjectForm() {
       {/* Project name */}
       <div>
         <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
-          Nombre del Proyecto <span className="text-red-400">*</span>
+          Nome do Projeto <span className="text-red-400">*</span>
         </label>
         <input
           type="text"
           value={nome}
           onChange={(e) => setNome(e.target.value)}
-          placeholder="Ej: Construcción de centro de salud — Pliego 001/2025"
+          placeholder="Ex: Construção de UBS — Edital 001/2025"
           className="w-full h-9 rounded-md border border-[#2A2A2A] bg-[#0A0A0A] px-3 text-sm text-[#FAFAFA] placeholder:text-[#666666] focus:outline-none focus:ring-1 focus:ring-amber-500"
           disabled={loading}
         />
@@ -97,12 +97,12 @@ export function NewProjectForm() {
       {/* Description */}
       <div>
         <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
-          Descripción <span className="text-[#666666] font-normal">(opcional)</span>
+          Descrição <span className="text-[#666666] font-normal">(opcional)</span>
         </label>
         <textarea
           value={descricao}
           onChange={(e) => setDescricao(e.target.value)}
-          placeholder="Breve descripción del proyecto u observaciones relevantes"
+          placeholder="Breve descrição do projeto ou observações relevantes"
           rows={3}
           className="w-full rounded-md border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] placeholder:text-[#666666] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
           disabled={loading}
@@ -114,7 +114,6 @@ export function NewProjectForm() {
         <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
           Modelo de IA
         </label>
-
         <Select
           value={aiProvider}
           onValueChange={(v) => setAiProvider(v as 'claude' | 'openai')}
@@ -129,14 +128,14 @@ export function NewProjectForm() {
           </SelectContent>
         </Select>
         <p className="text-xs text-[#666666] mt-1.5">
-          El modelo se usará para analizar el pliego y generar el presupuesto
+          O modelo será usado para analisar o edital e gerar o orçamento
         </p>
       </div>
 
       {/* PDF Upload */}
       <div>
         <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
-          Pliego en PDF <span className="text-[#666666] font-normal">(opcional — puede enviarlo después)</span>
+          Edital em PDF <span className="text-[#666666] font-normal">(opcional — pode enviar depois)</span>
         </label>
 
         {file ? (
@@ -171,10 +170,10 @@ export function NewProjectForm() {
           >
             <Upload className="w-8 h-8 text-[#A3A3A3] mx-auto mb-3" />
             <p className="text-sm text-[#A3A3A3]">
-              Arrastre el PDF aquí o{' '}
-              <span className="text-amber-400 font-medium">haga clic para seleccionar</span>
+              Arraste o PDF aqui ou{' '}
+              <span className="text-amber-400 font-medium">clique para selecionar</span>
             </p>
-            <p className="text-xs text-[#666666] mt-1">Solo archivos PDF</p>
+            <p className="text-xs text-[#666666] mt-1">Apenas arquivos PDF</p>
             <input
               ref={fileInputRef}
               type="file"
@@ -198,10 +197,10 @@ export function NewProjectForm() {
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {file ? 'Subiendo PDF...' : 'Creando proyecto...'}
+              {file ? 'Enviando PDF...' : 'Criando projeto...'}
             </>
           ) : (
-            'Crear Proyecto'
+            'Criar Projeto'
           )}
         </Button>
         <Button

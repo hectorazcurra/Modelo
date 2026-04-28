@@ -2,9 +2,9 @@ import type { Metadata } from 'next'
 import './globals.css'
 
 export const metadata: Metadata = {
-  title: 'Metodo Engenharia — Presupuestos de Obras Públicas',
+  title: 'Metodo Engenharia — Orçamentos de Obras Públicas',
   description:
-    'Plataforma inteligente para el análisis de pliegos y generación de presupuestos de obras públicas con IA.',
+    'Plataforma inteligente para análise de editais e geração de orçamentos de obras públicas com IA.',
 }
 
 export default function RootLayout({

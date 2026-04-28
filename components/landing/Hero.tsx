@@ -19,27 +19,27 @@ export function Hero() {
       <div className="relative max-w-5xl mx-auto text-center">
         <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-sm text-amber-400 mb-8">
           <Sparkles className="w-3.5 h-3.5" />
-          <span>IA integrada con Claude y GPT-4o</span>
+          <span>IA integrada com Claude e GPT-4o</span>
         </div>
 
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-none">
-          Presupuestos de obras{' '}
+          Orçamentos de obras{' '}
           <span className="text-amber-400">inteligentes</span>
         </h1>
 
         <p className="text-lg md:text-xl text-[#A3A3A3] max-w-2xl mx-auto mb-10 leading-relaxed">
-          Importe pliegos de licitación en PDF, deje que la IA analice los requisitos y genere
-          presupuestos detallados con costo por m², mano de obra y cronograma.
+          Importe editais de licitação em PDF, deixe a IA analisar os requisitos e gere orçamentos
+          detalhados com custo por m², mão de obra e cronograma.
         </p>
 
         <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
           <Button href="/dashboard" size="lg" className="text-base px-8">
-            Acceder al Dashboard
+            Acessar Dashboard
             <ArrowRight className="w-4 h-4" />
           </Button>
           <Button href="/projetos/novo" size="lg" variant="outline" className="text-base px-8">
             <FileText className="w-4 h-4" />
-            Nuevo Proyecto
+            Novo Projeto
           </Button>
         </div>
 

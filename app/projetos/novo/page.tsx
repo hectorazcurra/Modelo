@@ -23,9 +23,9 @@ export default function NovoProjeto() {
 
       <main className="max-w-3xl mx-auto px-6 py-12">
         <div className="mb-8">
-          <h1 className="text-2xl font-bold mb-1">Nuevo Proyecto</h1>
+          <h1 className="text-2xl font-bold mb-1">Novo Projeto</h1>
           <p className="text-[#A3A3A3] text-sm">
-            Complete los datos del proyecto y suba el pliego para comenzar el análisis con IA
+            Preencha os dados do projeto e faça upload do edital para começar a análise com IA
           </p>
         </div>
         <NewProjectForm />

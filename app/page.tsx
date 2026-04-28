@@ -15,10 +15,10 @@ export default function LandingPage() {
       <footer className="border-t border-[#2A2A2A] py-8 px-6">
         <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <p className="text-sm text-[#A3A3A3]">
-            © 2025 Metodo Engenharia. Plataforma de presupuestos para obras públicas.
+            © 2025 Metodo Engenharia. Plataforma de orçamentos para obras públicas.
           </p>
           <div className="flex items-center gap-2">
-            <span className="text-xs text-[#666666]">Desarrollado por</span>
+            <span className="text-xs text-[#666666]">Desenvolvido por</span>
             <img
               src="/nato-digital-logo.png"
               alt="Nato Digital"

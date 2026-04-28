@@ -41,7 +41,7 @@ export function ChatInput({ onSend, isLoading }: ChatInputProps) {
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Mensaje... (Enter para enviar, Shift+Enter para nueva línea)"
+        placeholder="Mensagem... (Enter para enviar, Shift+Enter para nova linha)"
         rows={1}
         disabled={isLoading}
         className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#111111] px-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#666666] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none overflow-hidden disabled:opacity-50"

@@ -71,7 +71,7 @@ export function WorkspaceClient({
 
   const handleAnalyze = useCallback(async () => {
     await sendMessage({
-      text: 'Por favor, analiza el pliego cargado y genera un presupuesto inicial detallado con todos los ítems, costos por m², mano de obra y cronograma.',
+      text: 'Por favor, analise o edital carregado e gere um orçamento inicial detalhado com todos os itens, custos por m², mão de obra e cronograma.',
     })
   }, [sendMessage])
 
@@ -136,7 +136,6 @@ export function WorkspaceClient({
             <span className="text-xs font-medium text-[#A3A3A3] uppercase tracking-wider">
               Chat
             </span>
-
           </div>
           <div className="flex-1 overflow-hidden">
             <ChatPanel
@@ -154,7 +153,7 @@ export function WorkspaceClient({
         <div className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-shrink-0 px-4 py-2.5 border-b border-[#2A2A2A] bg-[#111111] flex items-center justify-between">
             <span className="text-xs font-medium text-[#A3A3A3] uppercase tracking-wider">
-              Presupuesto
+              Orçamento
             </span>
             {orcamento && (
               <span className="text-xs text-[#666666]">v{orcamento.versao}</span>
