@@ -20,14 +20,27 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Projeto não encontrado' }, { status: 404 })
     }
 
-    const baseConhecimento = await prisma.baseConhecimento.findMany({
+    const baseReferencia = await prisma.baseConhecimento.findMany({
+      where: { tipo: { not: 'projeto_historico' } },
       orderBy: { criadoEm: 'desc' },
-      take: 10,
+      take: 5,
     })
 
-    const baseTexto = baseConhecimento
-      .map((b) => `### ${b.titulo}\n${JSON.stringify(b.dados, null, 2)}`)
-      .join('\n\n')
+    const historicos = await prisma.baseConhecimento.findMany({
+      where: { tipo: 'projeto_historico' },
+      orderBy: { criadoEm: 'desc' },
+      take: 8,
+    })
+
+    const baseTexto = [
+      ...baseReferencia.map((b) => `### ${b.titulo}\n${JSON.stringify(b.dados, null, 2)}`),
+      ...(historicos.length > 0
+        ? [
+            `### Projetos históricos da empresa (${historicos.length})`,
+            ...historicos.map((b) => `- ${b.titulo}\n${JSON.stringify(b.dados, null, 2).slice(0, 1500)}`),
+          ]
+        : []),
+    ].join('\n\n')
 
     const systemPrompt = buildSystemPrompt({
       pdfTexto: projeto.pdfTexto,
