@@ -87,6 +87,21 @@ export function WorkspaceClient({
     }
   }, [projeto.id])
 
+  const handleSalvarEdicao = useCallback(
+    async (dados: OrcamentoDados) => {
+      const res = await fetch(`/api/orcamento/${projeto.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dados }),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        setOrcamento({ dados: data.dados, versao: data.versao, aprovado: data.aprovado })
+      }
+    },
+    [projeto.id]
+  )
+
   return (
     <div className="h-screen flex flex-col bg-[#0A0A0A] overflow-hidden">
       {/* Header */}
@@ -165,6 +180,7 @@ export function WorkspaceClient({
               versao={orcamento?.versao ?? 1}
               aprovado={aprovado}
               onAprovar={handleAprovar}
+              onSalvarEdicao={handleSalvarEdicao}
             />
           </div>
         </div>

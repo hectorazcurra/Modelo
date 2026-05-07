@@ -34,25 +34,67 @@ export async function PUT(
 
     const existing = await prisma.orcamento.findUnique({ where: { projetoId: id } })
 
+    let orcamento
     if (existing) {
-      const orcamento = await prisma.orcamento.update({
+      orcamento = await prisma.orcamento.update({
         where: { projetoId: id },
         data: {
           ...(dados && { dados: dados as unknown as Parameters<typeof prisma.orcamento.update>[0]['data']['dados'], versao: { increment: 1 } }),
           ...(aprovado !== undefined && { aprovado }),
         },
       })
-      return Response.json(orcamento)
     } else {
-      const orcamento = await prisma.orcamento.create({
+      orcamento = await prisma.orcamento.create({
         data: {
           projetoId: id,
           dados: dados as unknown as Parameters<typeof prisma.orcamento.create>[0]['data']['dados'],
           aprovado: aprovado ?? false,
         },
       })
-      return Response.json(orcamento)
     }
+
+    // When approving, save to BaseConhecimento so future AI sessions can learn from it
+    if (aprovado === true) {
+      const projeto = await prisma.projeto.findUnique({ where: { id } })
+      if (projeto) {
+        const orcDados = (dados ?? orcamento.dados) as OrcamentoDados
+        const titulo = `Projeto aprovado: ${projeto.nome}`
+
+        await prisma.baseConhecimento.deleteMany({
+          where: { tipo: 'projeto_aprovado', titulo },
+        })
+
+        await prisma.baseConhecimento.create({
+          data: {
+            tipo: 'projeto_aprovado',
+            titulo,
+            dados: {
+              projetoId: id,
+              nome: projeto.nome,
+              aiProvider: projeto.aiProvider,
+              aprovadoEm: new Date().toISOString(),
+              versao: orcamento.versao,
+              resumo: orcDados.resumo ?? null,
+              totalGeral: orcDados.totalGeral ?? null,
+              custoM2: orcDados.custoM2 ?? null,
+              areaTotal: orcDados.areaTotal ?? null,
+              escopo: orcDados.escopo ?? [],
+              itens: orcDados.itens ?? [],
+              maoDeObra: orcDados.maoDeObra ?? [],
+              cronograma: orcDados.cronograma ?? [],
+              observacoes: orcDados.observacoes ?? '',
+            } as unknown as Parameters<typeof prisma.baseConhecimento.create>[0]['data']['dados'],
+          },
+        })
+
+        await prisma.projeto.update({
+          where: { id },
+          data: { status: 'APROVADO' },
+        })
+      }
+    }
+
+    return Response.json(orcamento)
   } catch (error) {
     console.error(error)
     return Response.json({ error: 'Erro ao atualizar orçamento' }, { status: 500 })
