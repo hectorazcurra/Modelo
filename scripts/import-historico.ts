@@ -13,6 +13,7 @@ import {
   type PPUData,
   type EquipeTarefa,
 } from '../lib/excel/extractor'
+import { extractDocRecFolder, type DocRecExtraction } from '../lib/extractors/docs'
 
 interface IndexProjeto {
   os: string
@@ -36,17 +37,25 @@ interface ImportRecord {
   dashboard: DashboardData | null
   ppu: PPUData | null
   equipes: EquipeTarefa[] | null
+  docRec: DocRecExtraction | null
   erro: string | null
 }
 
 // ─── CLI args ────────────────────────────────────────────────────────────────
 
-function parseArgs(): { index: string; dir: string; dryRun: boolean; limit: number | null } {
+function parseArgs(): {
+  index: string
+  dir: string
+  dryRun: boolean
+  limit: number | null
+  os: string | null
+} {
   const argv = process.argv.slice(2)
   let index = ''
   let dir = '/var/lib/metodo/arquivos/'
   let dryRun = false
   let limit: number | null = null
+  let os: string | null = null
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -54,15 +63,16 @@ function parseArgs(): { index: string; dir: string; dryRun: boolean; limit: numb
     else if (a === '--dir') dir = argv[++i]
     else if (a === '--dry-run') dryRun = true
     else if (a === '--limit') limit = parseInt(argv[++i], 10)
+    else if (a === '--os') os = argv[++i]
   }
 
   if (!index) {
     console.error(
-      'Uso: tsx scripts/import-historico.ts --index <FUP.xlsx> [--dir <base>] [--dry-run] [--limit N]'
+      'Uso: tsx scripts/import-historico.ts --index <FUP.xlsx> [--dir <base>] [--dry-run] [--limit N] [--os <prefixo>]'
     )
     process.exit(1)
   }
-  return { index, dir, dryRun, limit }
+  return { index, dir, dryRun, limit, os }
 }
 
 // ─── Number parsing ──────────────────────────────────────────────────────────
@@ -264,7 +274,7 @@ function findLatestPricingXlsx(projectFolder: string): { xlsx: string; rev: stri
 
 // ─── Per-project processing ──────────────────────────────────────────────────
 
-function processProject(baseDir: string, proj: IndexProjeto): ImportRecord {
+async function processProject(baseDir: string, proj: IndexProjeto): Promise<ImportRecord> {
   const rec: ImportRecord = {
     csv: proj,
     pasta: null,
@@ -273,6 +283,7 @@ function processProject(baseDir: string, proj: IndexProjeto): ImportRecord {
     dashboard: null,
     ppu: null,
     equipes: null,
+    docRec: null,
     erro: null,
   }
 
@@ -283,6 +294,24 @@ function processProject(baseDir: string, proj: IndexProjeto): ImportRecord {
       return rec
     }
     rec.pasta = folder
+
+    const docRecCandidates = ['01. Doc. Rec', '01. Doc Rec', '01.Doc.Rec', '01. Documentos Recebidos']
+    for (const d of docRecCandidates) {
+      const docRecPath = path.join(folder, d)
+      if (fs.existsSync(docRecPath)) {
+        try {
+          rec.docRec = await extractDocRecFolder(docRecPath)
+        } catch (err) {
+          rec.docRec = {
+            textoConcatenado: `[erro: ${err instanceof Error ? err.message : String(err)}]`,
+            arquivos: [],
+            totalBytesTexto: 0,
+            truncado: false,
+          }
+        }
+        break
+      }
+    }
 
     const found = findLatestPricingXlsx(folder)
     if (!found) {
@@ -313,7 +342,7 @@ function buildTitulo(proj: IndexProjeto): string {
 }
 
 function buildDados(rec: ImportRecord) {
-  const { csv: proj, dashboard, ppu, equipes, arquivoXlsx, revisao, pasta } = rec
+  const { csv: proj, dashboard, ppu, equipes, arquivoXlsx, revisao, pasta, docRec } = rec
   return {
     os: proj.os,
     cliente: proj.cliente,
@@ -333,6 +362,14 @@ function buildDados(rec: ImportRecord) {
     itens: ppu?.itens ?? null,
     totalGeralPPU: ppu?.totalGeral ?? null,
     equipes: equipes ?? null,
+    cartaConvite: docRec
+      ? {
+          textoExtraido: docRec.textoConcatenado,
+          arquivos: docRec.arquivos,
+          totalBytes: docRec.totalBytesTexto,
+          truncado: docRec.truncado,
+        }
+      : null,
     importadoEm: new Date().toISOString(),
   }
 }
@@ -357,15 +394,23 @@ async function main() {
 
   console.log(`\n${projetos.length} projetos lidos do índice.\n`)
 
-  const lista = args.limit ? projetos.slice(0, args.limit) : projetos
+  let filtrados = projetos
+  if (args.os) {
+    filtrados = projetos.filter((p) => p.os.startsWith(args.os!))
+    console.log(`Filtrando por OS prefixo "${args.os}": ${filtrados.length} projetos.\n`)
+  }
+  const lista = args.limit ? filtrados.slice(0, args.limit) : filtrados
   const records: ImportRecord[] = []
 
   for (const proj of lista) {
-    const rec = processProject(args.dir, proj)
+    const rec = await processProject(args.dir, proj)
     records.push(rec)
+    const docInfo = rec.docRec
+      ? `  doc=${rec.docRec.arquivos.length}/${(rec.docRec.totalBytesTexto / 1024).toFixed(1)}KB`
+      : ''
     const status = rec.erro
-      ? `ERRO: ${rec.erro}`
-      : `OK  rev=${rec.revisao}  equipes=${rec.equipes?.length ?? 0}  ppu=${rec.ppu?.itens.length ?? 0}`
+      ? `ERRO: ${rec.erro}${docInfo}`
+      : `OK  rev=${rec.revisao}  equipes=${rec.equipes?.length ?? 0}  ppu=${rec.ppu?.itens.length ?? 0}${docInfo}`
     const label = `${proj.os} ${proj.cliente}`.slice(0, 40).padEnd(40)
     console.log(`  ${label} → ${status}`)
   }
