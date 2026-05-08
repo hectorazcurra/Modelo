@@ -21,16 +21,27 @@ export async function POST(request: NextRequest) {
     }
 
     const baseReferencia = await prisma.baseConhecimento.findMany({
-      where: { tipo: { not: 'projeto_historico' } },
+      where: { tipo: { in: ['custo_m2', 'mao_de_obra', 'projeto_aprovado'] } },
       orderBy: { criadoEm: 'desc' },
       take: 5,
     })
 
-    const historicos = await prisma.baseConhecimento.findMany({
-      where: { tipo: 'projeto_historico' },
-      orderBy: { criadoEm: 'desc' },
-      take: 8,
-    })
+    // Only load historicos that have actual data (pricing xlsx OR carta convite)
+    type HistoricoRaw = { titulo: string; dados: string }
+    const historicos: HistoricoRaw[] = await prisma.$queryRaw`
+      SELECT titulo, dados
+      FROM BaseConhecimento
+      WHERE tipo = 'projeto_historico'
+      AND (
+        JSON_EXTRACT(dados, '$.arquivoXlsx') IS NOT NULL
+        OR JSON_EXTRACT(dados, '$.cartaConvite') IS NOT NULL
+      )
+      ORDER BY criadoEm DESC
+    `
+    const historicosFormatted = historicos.map((h) => ({
+      titulo: h.titulo,
+      dados: typeof h.dados === 'string' ? (JSON.parse(h.dados) as unknown) : h.dados,
+    }))
 
     type HistoricoDados = {
       os?: string
@@ -95,10 +106,10 @@ export async function POST(request: NextRequest) {
 
     const baseTexto = [
       ...baseReferencia.map((b) => `### ${b.titulo}\n${JSON.stringify(b.dados, null, 2)}`),
-      ...(historicos.length > 0
+      ...(historicosFormatted.length > 0
         ? [
-            `### Projetos históricos da empresa (${historicos.length})`,
-            ...historicos.map(formatHistorico),
+            `### Projetos históricos da empresa (${historicosFormatted.length} projetos com dados)`,
+            ...historicosFormatted.map(formatHistorico),
           ]
         : []),
     ].join('\n\n')
@@ -118,7 +129,7 @@ export async function POST(request: NextRequest) {
       model,
       system: systemPrompt,
       messages: modelMessages,
-      onFinish: async ({ text }) => {
+      onFinish: async ({ text }: { text: string }) => {
         const cleanText = stripOrcamentoBlock(text)
 
         await prisma.mensagem.create({
