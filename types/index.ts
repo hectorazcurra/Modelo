@@ -9,6 +9,8 @@ export interface OrcamentoItem {
   qtd: number
   custoUnit: number
   total: number
+  fonte?: string        // OS de referência ex: "OS 2026-013 - SCALA"
+  semHistorico?: boolean  // true se não há dado na base
 }
 
 export interface MaoDeObra {
@@ -17,6 +19,8 @@ export interface MaoDeObra {
   dias: number
   valorDia: number
   total: number
+  fonte?: string        // OS de referência ex: "OS 2026-037 - BALNEÁRIO"
+  semHistorico?: boolean
 }
 
 export interface FaseCronograma {

@@ -98,6 +98,32 @@ function stripHtml(html: string): string {
   return html.replace(/<[^>]+>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim()
 }
 
+function extractEmlText(buf: Buffer): string {
+  const raw = buf.toString('utf-8')
+  const lines = raw.split(/\r?\n/)
+  const headers: string[] = []
+  const bodyLines: string[] = []
+  let inBody = false
+  let inHtml = false
+
+  for (const line of lines) {
+    if (!inBody) {
+      if (line.trim() === '') { inBody = true; continue }
+      const lower = line.toLowerCase()
+      if (lower.startsWith('subject:') || lower.startsWith('from:') || lower.startsWith('to:') || lower.startsWith('date:')) {
+        headers.push(line.trim())
+      }
+    } else {
+      if (line.toLowerCase().includes('content-type: text/html')) { inHtml = true }
+      if (line.toLowerCase().includes('content-type: text/plain')) { inHtml = false }
+      if (!line.startsWith('--') && !line.toLowerCase().startsWith('content-')) {
+        bodyLines.push(inHtml ? stripHtml(line) : line)
+      }
+    }
+  }
+  return [...headers, '', ...bodyLines].join('\n').replace(/\n{3,}/g, '\n\n').trim()
+}
+
 async function extractByExtension(ext: string, buf: Buffer): Promise<string | null> {
   switch (ext) {
     case '.pdf':
@@ -108,6 +134,8 @@ async function extractByExtension(ext: string, buf: Buffer): Promise<string | nu
       return await extractMsgText(buf)
     case '.txt':
       return buf.toString('utf-8')
+    case '.eml':
+      return extractEmlText(buf)
     case '.xlsx':
     case '.xlsm':
     case '.xls':
@@ -262,4 +290,22 @@ export async function extractDocRecFolder(
   result.textoConcatenado = combined
   result.totalBytesTexto = Buffer.byteLength(combined, 'utf-8')
   return result
+}
+
+// ─── Public API for single-file extraction ───────────────────────────────────
+
+const EXTRACTABLE = new Set(['.pdf', '.docx', '.msg', '.eml', '.txt', '.xlsx', '.xlsm', '.xls', '.zip'])
+
+export async function extractTextFromFile(filename: string, buffer: Buffer): Promise<string | null> {
+  const ext = path.extname(filename).toLowerCase()
+  if (ext === '.zip') {
+    const parts = await extractFromZip(buffer, filename)
+    const combined = parts
+      .filter((p) => p.texto.trim())
+      .map((p) => `=== ${p.nome} ===\n${p.texto}`)
+      .join('\n\n')
+    return combined.trim() || null
+  }
+  if (!EXTRACTABLE.has(ext)) return null
+  return extractByExtension(ext, buffer)
 }

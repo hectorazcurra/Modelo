@@ -18,14 +18,22 @@ export function NewProjectForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  const ACCEPTED_EXTS = ['.pdf', '.docx', '.doc', '.msg', '.eml', '.xlsx', '.xls', '.txt', '.zip']
+
+  function isAccepted(f: File): boolean {
+    const name = f.name.toLowerCase()
+    return ACCEPTED_EXTS.some((ext) => name.endsWith(ext))
+  }
+
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setIsDragging(false)
     const dropped = e.dataTransfer.files[0]
-    if (dropped?.type === 'application/pdf') {
+    if (dropped && isAccepted(dropped)) {
       setFile(dropped)
+      setError('')
     } else {
-      setError('Apenas arquivos PDF são aceitos')
+      setError('Formato não suportado. Use PDF, DOCX, MSG, EML, XLSX, TXT ou ZIP.')
     }
   }
 
@@ -135,7 +143,7 @@ export function NewProjectForm() {
       {/* PDF Upload */}
       <div>
         <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
-          Edital em PDF <span className="text-[#666666] font-normal">(opcional — pode enviar depois)</span>
+          Carta Convite / Edital <span className="text-[#666666] font-normal">(opcional — pode enviar depois)</span>
         </label>
 
         {file ? (
@@ -170,18 +178,21 @@ export function NewProjectForm() {
           >
             <Upload className="w-8 h-8 text-[#A3A3A3] mx-auto mb-3" />
             <p className="text-sm text-[#A3A3A3]">
-              Arraste o PDF aqui ou{' '}
+              Arraste o arquivo aqui ou{' '}
               <span className="text-amber-400 font-medium">clique para selecionar</span>
             </p>
-            <p className="text-xs text-[#666666] mt-1">Apenas arquivos PDF</p>
+            <p className="text-xs text-[#666666] mt-1">PDF · DOCX · MSG · EML · XLSX · TXT · ZIP</p>
             <input
               ref={fileInputRef}
               type="file"
-              accept=".pdf,application/pdf"
+              accept=".pdf,.docx,.doc,.msg,.eml,.xlsx,.xls,.txt,.zip"
               className="hidden"
               onChange={(e) => {
                 const f = e.target.files?.[0]
-                if (f) setFile(f)
+                if (f) {
+                  if (isAccepted(f)) { setFile(f); setError('') }
+                  else setError('Formato não suportado. Use PDF, DOCX, MSG, EML, XLSX, TXT ou ZIP.')
+                }
               }}
             />
           </div>
@@ -197,7 +208,7 @@ export function NewProjectForm() {
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {file ? 'Enviando PDF...' : 'Criando projeto...'}
+              {file ? 'Enviando arquivo...' : 'Criando projeto...'}
             </>
           ) : (
             'Criar Projeto'

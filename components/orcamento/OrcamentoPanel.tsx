@@ -304,32 +304,41 @@ export function OrcamentoPanel({
                         return (
                           <div
                             key={localIdx}
-                            className="flex items-center justify-between text-xs py-1.5 border-b border-[#1A1A1A] last:border-0"
+                            className="py-1.5 border-b border-[#1A1A1A] last:border-0"
                           >
-                            <span className="text-[#A3A3A3] flex-1 pr-2">{item.descricao}</span>
-                            {editMode ? (
-                              <div className="flex items-center gap-1">
-                                <NumericInput
-                                  value={item.qtd}
-                                  onChange={(v) => updateItem(globalIdx, 'qtd', v)}
-                                  className="w-10 text-center bg-transparent border-b border-[#2A2A2A] focus:outline-none text-[#666666]"
-                                />
-                                <span className="text-[#666666]">{item.unidade} ×</span>
-                                <NumericInput
-                                  value={item.custoUnit}
-                                  onChange={(v) => updateItem(globalIdx, 'custoUnit', v)}
-                                  className="w-20 text-right bg-transparent border-b border-[#2A2A2A] focus:outline-none text-[#FAFAFA]"
-                                />
+                            <div className="flex items-center justify-between text-xs">
+                              <span className={`flex-1 pr-2 ${item.semHistorico ? 'text-amber-400/80' : 'text-[#A3A3A3]'}`}>
+                                {item.semHistorico && '⚠️ '}{item.descricao}
+                              </span>
+                              {editMode ? (
+                                <div className="flex items-center gap-1">
+                                  <NumericInput
+                                    value={item.qtd}
+                                    onChange={(v) => updateItem(globalIdx, 'qtd', v)}
+                                    className="w-10 text-center bg-transparent border-b border-[#2A2A2A] focus:outline-none text-[#666666]"
+                                  />
+                                  <span className="text-[#666666]">{item.unidade} ×</span>
+                                  <NumericInput
+                                    value={item.custoUnit}
+                                    onChange={(v) => updateItem(globalIdx, 'custoUnit', v)}
+                                    className="w-20 text-right bg-transparent border-b border-[#2A2A2A] focus:outline-none text-[#FAFAFA]"
+                                  />
+                                </div>
+                              ) : (
+                                <>
+                                  <span className="text-[#666666] w-14 text-center">
+                                    {item.qtd} {item.unidade}
+                                  </span>
+                                  <span className="text-[#FAFAFA] w-24 text-right font-medium">
+                                    {formatCurrency(item.total)}
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                            {item.fonte && !editMode && (
+                              <div className="text-[10px] text-[#555555] mt-0.5 pl-0.5">
+                                Ref: {item.fonte}
                               </div>
-                            ) : (
-                              <>
-                                <span className="text-[#666666] w-14 text-center">
-                                  {item.qtd} {item.unidade}
-                                </span>
-                                <span className="text-[#FAFAFA] w-24 text-right font-medium">
-                                  {formatCurrency(item.total)}
-                                </span>
-                              </>
                             )}
                           </div>
                         )
@@ -498,14 +507,23 @@ function Section({
 
 function MaoDeObraRow({ item }: { item: MaoDeObra }) {
   return (
-    <div className="flex items-center justify-between text-xs py-1.5 border-b border-[#1A1A1A] last:border-0">
-      <span className="text-[#A3A3A3] flex-1 pr-2">{item.funcao}</span>
-      <span className="text-[#666666] w-24 text-center">
-        {item.qtd}x · {item.dias}d
-      </span>
-      <span className="text-[#FAFAFA] w-24 text-right font-medium">
-        {formatCurrency(item.total)}
-      </span>
+    <div className="py-1.5 border-b border-[#1A1A1A] last:border-0">
+      <div className="flex items-center justify-between text-xs">
+        <span className={`flex-1 pr-2 ${item.semHistorico ? 'text-amber-400/80' : 'text-[#A3A3A3]'}`}>
+          {item.semHistorico && '⚠️ '}{item.funcao}
+        </span>
+        <span className="text-[#666666] w-24 text-center">
+          {item.qtd}x · {item.dias}d
+        </span>
+        <span className="text-[#FAFAFA] w-24 text-right font-medium">
+          {formatCurrency(item.total)}
+        </span>
+      </div>
+      {item.fonte && (
+        <div className="text-[10px] text-[#555555] mt-0.5 pl-0.5">
+          Ref: {item.fonte}
+        </div>
+      )}
     </div>
   )
 }
