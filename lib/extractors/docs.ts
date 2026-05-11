@@ -3,7 +3,7 @@ import * as path from 'node:path'
 import * as XLSX from 'xlsx'
 import AdmZip from 'adm-zip'
 
-const SUPPORTED_TEXT_EXT = new Set(['.pdf', '.docx', '.msg', '.txt', '.xlsx', '.xls', '.xlsm'])
+const SUPPORTED_TEXT_EXT = new Set(['.pdf', '.docx', '.msg', '.txt', '.xlsx', '.xls', '.xlsm', '.pptx', '.ppt'])
 const SKIP_EXT = new Set([
   '.dwg', '.dwl', '.dwl2', '.ifc', '.rvt',
   '.jpg', '.jpeg', '.png', '.gif', '.bmp', '.tiff',
@@ -79,6 +79,32 @@ async function extractMsgText(buf: Buffer): Promise<string> {
   }
 }
 
+function extractPptxText(buf: Buffer): string {
+  try {
+    const zip = new AdmZip(buf)
+    const slideEntries = zip
+      .getEntries()
+      .filter((e) => /^ppt\/slides\/slide\d+\.xml$/.test(e.entryName))
+      .sort((a, b) => {
+        const n = (s: string) => parseInt(s.replace(/\D/g, '') || '0')
+        return n(a.entryName) - n(b.entryName)
+      })
+    const parts: string[] = []
+    for (const entry of slideEntries) {
+      const xml = entry.getData().toString('utf-8')
+      const texts = Array.from(xml.matchAll(/<a:t[^>]*>([^<]*)<\/a:t>/g))
+        .map((m) =>
+          m[1].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').trim()
+        )
+        .filter(Boolean)
+      if (texts.length) parts.push(texts.join(' '))
+    }
+    return parts.join('\n').replace(/[ \t]+/g, ' ').trim()
+  } catch (err) {
+    return `[erro ao ler PPTX: ${err instanceof Error ? err.message : String(err)}]`
+  }
+}
+
 function extractXlsxText(buf: Buffer): string {
   try {
     const wb = XLSX.read(buf, { type: 'buffer' })
@@ -140,6 +166,9 @@ async function extractByExtension(ext: string, buf: Buffer): Promise<string | nu
     case '.xlsm':
     case '.xls':
       return extractXlsxText(buf)
+    case '.pptx':
+    case '.ppt':
+      return extractPptxText(buf)
     default:
       return null
   }
@@ -294,7 +323,7 @@ export async function extractDocRecFolder(
 
 // ─── Public API for single-file extraction ───────────────────────────────────
 
-const EXTRACTABLE = new Set(['.pdf', '.docx', '.msg', '.eml', '.txt', '.xlsx', '.xlsm', '.xls', '.zip'])
+const EXTRACTABLE = new Set(['.pdf', '.docx', '.msg', '.eml', '.txt', '.xlsx', '.xlsm', '.xls', '.pptx', '.ppt', '.zip'])
 
 export async function extractTextFromFile(filename: string, buffer: Buffer): Promise<string | null> {
   const ext = path.extname(filename).toLowerCase()

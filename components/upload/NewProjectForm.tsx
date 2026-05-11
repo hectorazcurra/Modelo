@@ -6,6 +6,21 @@ import { FileText, Upload, X, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
+const ACCEPTED_EXTS = [
+  '.pdf', '.docx', '.doc', '.msg', '.eml',
+  '.xlsx', '.xls', '.pptx', '.ppt', '.txt', '.zip',
+]
+
+function isAccepted(f: File): boolean {
+  const name = f.name.toLowerCase()
+  return ACCEPTED_EXTS.some((ext) => name.endsWith(ext))
+}
+
+function formatSize(bytes: number): string {
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
 export function NewProjectForm() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -13,28 +28,38 @@ export function NewProjectForm() {
   const [nome, setNome] = useState('')
   const [descricao, setDescricao] = useState('')
   const [aiProvider, setAiProvider] = useState<'claude' | 'openai'>('claude')
-  const [file, setFile] = useState<File | null>(null)
+  const [files, setFiles] = useState<File[]>([])
   const [isDragging, setIsDragging] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const ACCEPTED_EXTS = ['.pdf', '.docx', '.doc', '.msg', '.eml', '.xlsx', '.xls', '.txt', '.zip']
+  function addFiles(incoming: FileList | File[]) {
+    const valid: File[] = []
+    const rejected: string[] = []
+    for (const f of Array.from(incoming)) {
+      if (isAccepted(f)) valid.push(f)
+      else rejected.push(f.name)
+    }
+    if (valid.length) {
+      setFiles((prev) => {
+        const existing = new Set(prev.map((f) => f.name))
+        return [...prev, ...valid.filter((f) => !existing.has(f.name))]
+      })
+      setError('')
+    }
+    if (rejected.length) {
+      setError(`Formato não suportado: ${rejected.join(', ')}`)
+    }
+  }
 
-  function isAccepted(f: File): boolean {
-    const name = f.name.toLowerCase()
-    return ACCEPTED_EXTS.some((ext) => name.endsWith(ext))
+  function removeFile(name: string) {
+    setFiles((prev) => prev.filter((f) => f.name !== name))
   }
 
   function handleDrop(e: React.DragEvent) {
     e.preventDefault()
     setIsDragging(false)
-    const dropped = e.dataTransfer.files[0]
-    if (dropped && isAccepted(dropped)) {
-      setFile(dropped)
-      setError('')
-    } else {
-      setError('Formato não suportado. Use PDF, DOCX, MSG, EML, XLSX, TXT ou ZIP.')
-    }
+    addFiles(e.dataTransfer.files)
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -47,7 +72,6 @@ export function NewProjectForm() {
     setError('')
 
     try {
-      // Create project
       const res = await fetch('/api/projetos', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -57,18 +81,20 @@ export function NewProjectForm() {
       if (!res.ok) throw new Error('Erro ao criar projeto')
       const projeto = await res.json()
 
-      // Upload PDF if provided
-      if (file) {
+      if (files.length > 0) {
         const formData = new FormData()
-        formData.append('file', file)
         formData.append('projetoId', projeto.id)
+        for (const f of files) formData.append('file', f)
 
         const uploadRes = await fetch('/api/upload', {
           method: 'POST',
           body: formData,
         })
 
-        if (!uploadRes.ok) throw new Error('Erro ao fazer upload do PDF')
+        if (!uploadRes.ok) {
+          const body = await uploadRes.json().catch(() => ({}))
+          throw new Error(body.error ?? 'Erro ao fazer upload dos arquivos')
+        }
       }
 
       router.push(`/projetos/${projeto.id}`)
@@ -140,61 +166,69 @@ export function NewProjectForm() {
         </p>
       </div>
 
-      {/* PDF Upload */}
+      {/* File Upload */}
       <div>
         <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
-          Carta Convite / Edital <span className="text-[#666666] font-normal">(opcional — pode enviar depois)</span>
+          Carta Convite / Documentos{' '}
+          <span className="text-[#666666] font-normal">(opcional — pode enviar depois)</span>
         </label>
 
-        {file ? (
-          <div className="flex items-center gap-3 rounded-lg border border-amber-500/30 bg-amber-500/5 px-4 py-3">
-            <FileText className="w-5 h-5 text-amber-400 flex-shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="text-sm font-medium truncate">{file.name}</div>
-              <div className="text-xs text-[#A3A3A3]">
-                {(file.size / 1024 / 1024).toFixed(2)} MB
+        {/* Drop zone */}
+        <div
+          onDrop={handleDrop}
+          onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+          onDragLeave={() => setIsDragging(false)}
+          onClick={() => fileInputRef.current?.click()}
+          className={`rounded-xl border-2 border-dashed cursor-pointer transition-all p-6 text-center ${
+            isDragging
+              ? 'border-amber-500 bg-amber-500/5'
+              : 'border-[#2A2A2A] hover:border-amber-500/50 hover:bg-[#111111]'
+          }`}
+        >
+          <Upload className="w-7 h-7 text-[#A3A3A3] mx-auto mb-2" />
+          <p className="text-sm text-[#A3A3A3]">
+            Arraste arquivos aqui ou{' '}
+            <span className="text-amber-400 font-medium">clique para selecionar</span>
+          </p>
+          <p className="text-xs text-[#666666] mt-1">
+            PDF · DOCX · PPTX · MSG · EML · XLSX · TXT · ZIP — múltiplos arquivos
+          </p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            accept=".pdf,.docx,.doc,.msg,.eml,.xlsx,.xls,.pptx,.ppt,.txt,.zip"
+            className="hidden"
+            onChange={(e) => {
+              if (e.target.files?.length) addFiles(e.target.files)
+              e.target.value = ''
+            }}
+          />
+        </div>
+
+        {/* File list */}
+        {files.length > 0 && (
+          <div className="mt-2 space-y-1.5">
+            {files.map((f) => (
+              <div
+                key={f.name}
+                className="flex items-center gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2"
+              >
+                <FileText className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-xs font-medium text-[#FAFAFA] truncate">{f.name}</div>
+                  <div className="text-[10px] text-[#666666]">{formatSize(f.size)}</div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => removeFile(f.name)}
+                  disabled={loading}
+                  className="text-[#666666] hover:text-[#A3A3A3] transition-colors flex-shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
               </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setFile(null)}
-              className="text-[#A3A3A3] hover:text-[#FAFAFA] transition-colors"
-              disabled={loading}
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        ) : (
-          <div
-            onDrop={handleDrop}
-            onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
-            onDragLeave={() => setIsDragging(false)}
-            onClick={() => fileInputRef.current?.click()}
-            className={`rounded-xl border-2 border-dashed cursor-pointer transition-all p-8 text-center ${
-              isDragging
-                ? 'border-amber-500 bg-amber-500/5'
-                : 'border-[#2A2A2A] hover:border-amber-500/50 hover:bg-[#111111]'
-            }`}
-          >
-            <Upload className="w-8 h-8 text-[#A3A3A3] mx-auto mb-3" />
-            <p className="text-sm text-[#A3A3A3]">
-              Arraste o arquivo aqui ou{' '}
-              <span className="text-amber-400 font-medium">clique para selecionar</span>
-            </p>
-            <p className="text-xs text-[#666666] mt-1">PDF · DOCX · MSG · EML · XLSX · TXT · ZIP</p>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf,.docx,.doc,.msg,.eml,.xlsx,.xls,.txt,.zip"
-              className="hidden"
-              onChange={(e) => {
-                const f = e.target.files?.[0]
-                if (f) {
-                  if (isAccepted(f)) { setFile(f); setError('') }
-                  else setError('Formato não suportado. Use PDF, DOCX, MSG, EML, XLSX, TXT ou ZIP.')
-                }
-              }}
-            />
+            ))}
           </div>
         )}
       </div>
@@ -208,7 +242,7 @@ export function NewProjectForm() {
           {loading ? (
             <>
               <Loader2 className="w-4 h-4 animate-spin" />
-              {file ? 'Enviando arquivo...' : 'Criando projeto...'}
+              {files.length ? `Enviando ${files.length} arquivo${files.length > 1 ? 's' : ''}…` : 'Criando projeto…'}
             </>
           ) : (
             'Criar Projeto'
