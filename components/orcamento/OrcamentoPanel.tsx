@@ -73,6 +73,7 @@ export function OrcamentoPanel({
   }
 
   function acceptItem(idx: number) {
+    if (!localDados) return
     const item = localDados.itens[idx]
     const newDados = {
       ...localDados,
@@ -87,6 +88,7 @@ export function OrcamentoPanel({
   }
 
   function acceptMdo(idx: number) {
+    if (!localDados) return
     const mdo = localDados.maoDeObra[idx]
     const newDados = {
       ...localDados,
@@ -101,6 +103,7 @@ export function OrcamentoPanel({
   }
 
   function editItem(idx: number, updated: Pick<OrcamentoItem, 'qtd' | 'custoUnit'>) {
+    if (!localDados) return
     const item = localDados.itens[idx]
     const newTotal = updated.qtd * updated.custoUnit
     const newItens = localDados.itens.map((it, i) =>
@@ -123,6 +126,7 @@ export function OrcamentoPanel({
   }
 
   function editMdo(idx: number, updated: Pick<MaoDeObra, 'qtd' | 'dias' | 'valorDia'>) {
+    if (!localDados) return
     const mdo = localDados.maoDeObra[idx]
     const newTotal = updated.qtd * updated.dias * updated.valorDia
     const newMdo = localDados.maoDeObra.map((m, i) =>

@@ -3,10 +3,6 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/db/client'
 import { extractTextFromFile } from '@/lib/extractors/docs'
 
-export const config = {
-  api: { bodyParser: false },
-}
-
 const ACCEPTED_EXTENSIONS = new Set([
   '.pdf', '.docx', '.doc', '.msg', '.eml',
   '.xlsx', '.xls', '.xlsm', '.txt', '.zip',
