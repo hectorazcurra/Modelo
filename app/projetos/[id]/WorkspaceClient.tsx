@@ -9,7 +9,7 @@ import { ChatPanel } from '@/components/chat/ChatPanel'
 import { OrcamentoPanel } from '@/components/orcamento/OrcamentoPanel'
 import { Badge } from '@/components/ui/badge'
 import { statusLabel, statusColor } from '@/lib/utils'
-import type { StatusProjeto, OrcamentoDados } from '@/types'
+import type { StatusProjeto, OrcamentoDados, LinhaBaseInfo } from '@/types'
 
 interface WorkspaceClientProps {
   projeto: {
@@ -102,6 +102,17 @@ export function WorkspaceClient({
     [projeto.id]
   )
 
+  const handleConfirmarLinha = useCallback(
+    async (linha: LinhaBaseInfo) => {
+      await fetch(`/api/orcamento/${projeto.id}/confirmar-linha`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ linha }),
+      })
+    },
+    [projeto.id]
+  )
+
   return (
     <div className="h-screen flex flex-col bg-[#0A0A0A] overflow-hidden">
       {/* Header */}
@@ -181,6 +192,7 @@ export function WorkspaceClient({
               aprovado={aprovado}
               onAprovar={handleAprovar}
               onSalvarEdicao={handleSalvarEdicao}
+              onConfirmarLinha={handleConfirmarLinha}
             />
           </div>
         </div>

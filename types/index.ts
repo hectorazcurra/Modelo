@@ -2,6 +2,17 @@ export type AIProvider = 'claude' | 'openai'
 
 export type StatusProjeto = 'ANALISE' | 'ORCAMENTO' | 'REVISAO' | 'APROVADO'
 
+export type LinhaStatus = 'pending' | 'accepted' | 'edited'
+
+export interface LinhaBaseInfo {
+  descricao: string
+  unidade?: string
+  custoUnit?: number
+  valorDia?: number
+  total: number
+  tipo: 'item' | 'mdo'
+}
+
 export interface OrcamentoItem {
   categoria: string
   descricao: string
@@ -9,8 +20,9 @@ export interface OrcamentoItem {
   qtd: number
   custoUnit: number
   total: number
-  fonte?: string        // OS de referência ex: "OS 2026-013 - SCALA"
-  semHistorico?: boolean  // true se não há dado na base
+  fonte?: string
+  semHistorico?: boolean
+  status?: LinhaStatus
 }
 
 export interface MaoDeObra {
@@ -19,8 +31,9 @@ export interface MaoDeObra {
   dias: number
   valorDia: number
   total: number
-  fonte?: string        // OS de referência ex: "OS 2026-037 - BALNEÁRIO"
+  fonte?: string
   semHistorico?: boolean
+  status?: LinhaStatus
 }
 
 export interface FaseCronograma {
