@@ -6,6 +6,10 @@ import { buildSystemPrompt } from '@/lib/ai/prompts'
 import { extractOrcamentoFromText, stripOrcamentoBlock } from '@/lib/ai/analyzer'
 import type { AIProvider, OrcamentoDados } from '@/types'
 
+function safeParse(s: string): unknown {
+  try { return JSON.parse(s) } catch { return null }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
@@ -26,22 +30,24 @@ export async function POST(request: NextRequest) {
       take: 5,
     })
 
-    // Load historicos that have any actual data (folder was found).
-    // Two-step query: ORDER BY + LIMIT on IDs only (sort buffer stays
-    // tiny), then fetch the heavy `dados` JSON rows by id. A single-
-    // statement ORDER BY blows up MySQL's sort_buffer because each row
-    // has ~35KB of JSON.
+    // Load historicos. Two passes to avoid MySQL sort_buffer overflow
+    // (each `dados` row is ~35KB of JSON):
+    //   1. SELECT id ORDER BY criadoEm — sort buffer only holds (id, criadoEm)
+    //   2. findMany WHERE id IN (...) — no sort, just fetch
+    // The JSON pastaResolvida filter is done in JS to keep step 1's WHERE
+    // simple (no JSON_EXTRACT, which can also tip MySQL into the buffer).
     type HistoricoRaw = { titulo: string; dados: unknown }
     let historicos: HistoricoRaw[] = []
+    let totalRows = 0
     try {
       const ids = await prisma.$queryRaw<{ id: string }[]>`
         SELECT id
         FROM BaseConhecimento
         WHERE tipo = 'projeto_historico'
-        AND JSON_EXTRACT(dados, '$.pastaResolvida') IS NOT NULL
         ORDER BY criadoEm DESC
-        LIMIT 30
+        LIMIT 100
       `
+      totalRows = ids.length
       if (ids.length) {
         const rows = await prisma.baseConhecimento.findMany({
           where: { id: { in: ids.map((r) => r.id) } },
@@ -49,7 +55,15 @@ export async function POST(request: NextRequest) {
         })
         const order = new Map(ids.map((r, i) => [r.id, i]))
         rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
-        historicos = rows.map((r) => ({ titulo: r.titulo, dados: r.dados }))
+        historicos = rows
+          .filter((r) => {
+            const d = (typeof r.dados === 'string' ? safeParse(r.dados) : r.dados) as
+              | { pastaResolvida?: string | null }
+              | null
+            return !!d?.pastaResolvida
+          })
+          .slice(0, 30)
+          .map((r) => ({ titulo: r.titulo, dados: r.dados }))
       }
     } catch (err) {
       console.error('[chat] failed to load historicos:', err)
@@ -196,7 +210,7 @@ export async function POST(request: NextRequest) {
     console.log(
       `[chat] projeto=${projetoId} provider=${projeto.aiProvider} ` +
       `pdfTexto=${projeto.pdfTexto?.length ?? 0}ch base=${baseTexto.length}ch ` +
-      `historicos=${historicosFormatted.length} msgs=${modelMessages.length}`,
+      `historicos=${historicosFormatted.length}/${totalRows} msgs=${modelMessages.length}`,
     )
 
     const result = streamText({
