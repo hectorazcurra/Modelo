@@ -29,6 +29,7 @@ async function extractPdfText(buf: Buffer): Promise<string> {
   try {
     // Import the library file directly to bypass the index.js debug code
     // that tries to read a test PDF at module init (known pdf-parse bug).
+    // @ts-ignore — pdf-parse has no type declarations for its internal lib path
     const mod = (await import('pdf-parse/lib/pdf-parse.js')) as { default: (b: Buffer) => Promise<{ text: string }> }
     const data = await mod.default(buf)
     return data.text || ''
