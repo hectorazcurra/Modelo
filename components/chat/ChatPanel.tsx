@@ -1,9 +1,18 @@
 'use client'
 
-import { useRef, useEffect } from 'react'
-import { Bot, User } from 'lucide-react'
+import { useRef, useEffect, useState } from 'react'
+import { Bot, User, Upload } from 'lucide-react'
 import type { UIMessage } from 'ai'
 import { ChatInput } from './ChatInput'
+
+const ACCEPTED_EXTS = [
+  '.pdf', '.docx', '.doc', '.msg', '.eml',
+  '.xlsx', '.xls', '.pptx', '.ppt', '.txt', '.zip',
+]
+
+function isAccepted(f: File): boolean {
+  return ACCEPTED_EXTS.some((ext) => f.name.toLowerCase().endsWith(ext))
+}
 
 interface ChatPanelProps {
   messages: UIMessage[]
@@ -12,6 +21,8 @@ interface ChatPanelProps {
   projeto: { nome: string; aiProvider: string }
   onAnalyze: () => void
   hasPdf: boolean
+  onUpload: (files: File[]) => Promise<void>
+  isUploading: boolean
 }
 
 export function ChatPanel({
@@ -20,37 +31,70 @@ export function ChatPanel({
   isLoading,
   onAnalyze,
   hasPdf,
+  onUpload,
+  isUploading,
 }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
 
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setIsDragging(false)
+    const valid = Array.from(e.dataTransfer.files).filter(isAccepted)
+    if (valid.length) onUpload(valid)
+  }
+
   return (
-    <div className="flex flex-col h-full">
+    <div
+      className="flex flex-col h-full"
+      onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+      onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setIsDragging(false) }}
+      onDrop={handleDrop}
+    >
+      {/* Drag overlay */}
+      {isDragging && (
+        <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-amber-500 bg-amber-500/5 pointer-events-none">
+          <div className="text-center">
+            <Upload className="w-10 h-10 text-amber-400 mx-auto mb-2" />
+            <p className="text-sm font-medium text-amber-400">Solte os arquivos aqui</p>
+          </div>
+        </div>
+      )}
+
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 relative">
         {messages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center px-6 py-12">
+          <div className="h-full flex flex-col items-center justify-center text-center px-6 py-8">
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
               <Bot className="w-6 h-6 text-amber-400" />
             </div>
             <h3 className="font-medium text-[#FAFAFA] mb-2">Assistente de Orçamentos</h3>
-            <p className="text-sm text-[#A3A3A3] mb-6 max-w-xs">
-              {hasPdf
-                ? 'O edital foi carregado. Clique em "Analisar Edital" para começar a análise com IA.'
-                : 'Faça upload de um edital PDF ou descreva o projeto para gerar o orçamento.'}
-            </p>
-            {hasPdf && (
-              <button
-                onClick={onAnalyze}
-                disabled={isLoading}
-                className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/15 transition-colors disabled:opacity-50"
-              >
-                <Bot className="w-4 h-4" />
-                Analisar Edital com IA
-              </button>
+
+            {hasPdf ? (
+              <>
+                <p className="text-sm text-[#A3A3A3] mb-5 max-w-xs">
+                  Documentos carregados. Clique em "Analisar" para gerar o orçamento, ou envie mais arquivos.
+                </p>
+                <button
+                  onClick={onAnalyze}
+                  disabled={isLoading || isUploading}
+                  className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/15 transition-colors disabled:opacity-50"
+                >
+                  <Bot className="w-4 h-4" />
+                  Analisar com IA
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-[#A3A3A3] mb-5 max-w-xs">
+                  Carregue a carta convite, edital ou qualquer documento do projeto para começar.
+                </p>
+                <UploadZone onUpload={onUpload} isUploading={isUploading} />
+              </>
             )}
           </div>
         ) : (
@@ -77,11 +121,60 @@ export function ChatPanel({
 
       {/* Input */}
       <div className="flex-shrink-0 border-t border-[#2A2A2A] p-4">
-        <ChatInput onSend={onSendMessage} isLoading={isLoading} />
+        <ChatInput
+          onSend={onSendMessage}
+          isLoading={isLoading}
+          onUpload={onUpload}
+          isUploading={isUploading}
+        />
       </div>
     </div>
   )
 }
+
+// ── Upload drop zone (shown in empty state when no files yet) ─────────────────
+
+function UploadZone({
+  onUpload,
+  isUploading,
+}: {
+  onUpload: (files: File[]) => Promise<void>
+  isUploading: boolean
+}) {
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  return (
+    <div
+      onClick={() => !isUploading && fileInputRef.current?.click()}
+      className="w-full max-w-xs rounded-xl border-2 border-dashed border-[#2A2A2A] hover:border-amber-500/50 hover:bg-[#111111] cursor-pointer transition-all p-6 text-center"
+    >
+      <Upload className="w-7 h-7 text-[#A3A3A3] mx-auto mb-2" />
+      <p className="text-sm text-[#A3A3A3]">
+        {isUploading ? 'Processando…' : (
+          <>Clique ou arraste arquivos</>
+        )}
+      </p>
+      <p className="text-xs text-[#555555] mt-1">
+        PDF · DOCX · PPTX · MSG · EML · XLSX · TXT · ZIP
+      </p>
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept=".pdf,.docx,.doc,.msg,.eml,.xlsx,.xls,.pptx,.ppt,.txt,.zip"
+        className="hidden"
+        onChange={(e) => {
+          if (!e.target.files?.length) return
+          const valid = Array.from(e.target.files).filter(isAccepted)
+          if (valid.length) onUpload(valid)
+          e.target.value = ''
+        }}
+      />
+    </div>
+  )
+}
+
+// ── Message rendering ─────────────────────────────────────────────────────────
 
 function getMessageText(message: UIMessage): string {
   for (const part of message.parts) {
@@ -93,7 +186,6 @@ function getMessageText(message: UIMessage): string {
 function ChatMessage({ message }: { message: UIMessage }) {
   const isUser = message.role === 'user'
   const text = getMessageText(message)
-
   if (!text) return null
 
   return (
@@ -111,7 +203,6 @@ function ChatMessage({ message }: { message: UIMessage }) {
           <Bot className="w-3.5 h-3.5 text-amber-400" />
         )}
       </div>
-
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
           isUser

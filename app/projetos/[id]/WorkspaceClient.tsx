@@ -35,6 +35,9 @@ export function WorkspaceClient({
 }: WorkspaceClientProps) {
   const [orcamento, setOrcamento] = useState(initialOrcamento)
   const [aprovado, setAprovado] = useState(initialOrcamento?.aprovado ?? false)
+  const [hasPdf, setHasPdf] = useState(projeto.hasPdf)
+  const [pdfNome, setPdfNome] = useState(projeto.pdfNome)
+  const [isUploading, setIsUploading] = useState(false)
 
   const { messages, sendMessage, status } = useChat({
     transport: new TextStreamChatTransport({
@@ -74,6 +77,33 @@ export function WorkspaceClient({
       text: 'Por favor, analise o edital carregado e gere um orçamento inicial detalhado com todos os itens, custos por m², mão de obra e cronograma.',
     })
   }, [sendMessage])
+
+  const handleUpload = useCallback(
+    async (files: File[]) => {
+      setIsUploading(true)
+      try {
+        const formData = new FormData()
+        formData.append('projetoId', projeto.id)
+        for (const f of files) formData.append('file', f)
+
+        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        if (!res.ok) {
+          const body = await res.json().catch(() => ({}))
+          throw new Error(body.error ?? 'Erro ao fazer upload')
+        }
+        const data = await res.json()
+        setHasPdf(true)
+        setPdfNome(data.arquivos?.join(', ') ?? files.map((f) => f.name).join(', '))
+
+        await sendMessage({
+          text: 'Por favor, analise os documentos carregados e execute o fluxo completo de análise: identificação, mapeamento na base histórica, projeção de horas e orçamento consolidado.',
+        })
+      } finally {
+        setIsUploading(false)
+      }
+    },
+    [projeto.id, sendMessage]
+  )
 
   const handleAprovar = useCallback(async () => {
     const res = await fetch(`/api/orcamento/${projeto.id}`, {
@@ -135,10 +165,10 @@ export function WorkspaceClient({
 
         <div className="flex-1 min-w-0">
           <h1 className="text-sm font-semibold truncate">{projeto.nome}</h1>
-          {projeto.pdfNome && (
+          {pdfNome && (
             <p className="text-xs text-[#A3A3A3] truncate flex items-center gap-1">
               <FileText className="w-3 h-3 text-amber-400" />
-              {projeto.pdfNome}
+              {pdfNome}
             </p>
           )}
         </div>
@@ -170,7 +200,9 @@ export function WorkspaceClient({
               isLoading={isLoading}
               projeto={{ nome: projeto.nome, aiProvider: projeto.aiProvider }}
               onAnalyze={handleAnalyze}
-              hasPdf={projeto.hasPdf}
+              hasPdf={hasPdf}
+              onUpload={handleUpload}
+              isUploading={isUploading}
             />
           </div>
         </div>
