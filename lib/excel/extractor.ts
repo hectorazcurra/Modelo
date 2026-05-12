@@ -110,28 +110,33 @@ function parseNumero(v: Cell): number | null {
 function findCellValueAfter(rows: Cell[][], label: string, headerSiblings: string[] = []): Cell {
   const labelNorm = label.toLowerCase().trim()
   const siblingsNorm = headerSiblings.map((s) => s.toLowerCase().trim())
+
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r]
     for (let i = 0; i < row.length; i++) {
-      if (String(row[i] ?? '').toLowerCase().trim() === labelNorm) {
-        // Look right for the value
-        for (let j = i + 1; j < row.length; j++) {
-          if (isEmpty(row[j])) continue
-          const next = String(row[j]).toLowerCase().trim()
-          // If next non-empty cell is a known sibling header, this is a header row
-          if (siblingsNorm.includes(next)) {
-            // Look at the cell directly below the label
-            for (let rr = r + 1; rr < Math.min(r + 3, rows.length); rr++) {
-              if (i < rows[rr].length && !isEmpty(rows[rr][i])) return rows[rr][i]
-            }
-            return null
-          }
-          return row[j]
-        }
-        // Nothing to the right — check below
-        for (let rr = r + 1; rr < Math.min(r + 3, rows.length); rr++) {
-          if (i < rows[rr].length && !isEmpty(rows[rr][i])) return rows[rr][i]
-        }
+      if (String(row[i] ?? '').toLowerCase().trim() !== labelNorm) continue
+
+      // Try the immediately adjacent cell to the right
+      const right = row[i + 1]
+      const rightStr = String(right ?? '').toLowerCase().trim()
+      const rightIsSibling = rightStr !== '' && siblingsNorm.includes(rightStr)
+
+      if (!isEmpty(right) && !rightIsSibling) {
+        return right
+      }
+
+      // Otherwise look directly below (column-header layout)
+      if (r + 1 < rows.length) {
+        const below = rows[r + 1]
+        if (i < below.length && !isEmpty(below[i])) return below[i]
+      }
+
+      // Last resort: scan a couple of cells further right, skipping siblings
+      for (let j = i + 2; j < Math.min(i + 5, row.length); j++) {
+        if (isEmpty(row[j])) continue
+        const next = String(row[j]).toLowerCase().trim()
+        if (siblingsNorm.includes(next)) continue
+        return row[j]
       }
     }
   }
@@ -255,49 +260,57 @@ export function extractPPU(workbook: XLSX.WorkBook): PPUData {
   let totalGeral: number | null = null
 
   for (const row of rows) {
+    const descricao = row[1]
     const info = parseItemNumber(row[0])
-    if (info) {
-      const descricao = row[1]
-      if (isEmpty(descricao)) continue
-      const qtd = parseNumero(row[3]) ?? 0
-      const precoUnit = parseMoeda(row[4]) ?? 0
-      const precoTotal = parseMoeda(row[5]) ?? 0
 
-      // Category header: top-level item (integer) with no qty and no unit price
-      // (precoTotal may contain a subtotal shown on the category row itself)
-      if (info.isTop && qtd === 0 && precoUnit === 0) {
-        currentCategoria = {
-          item: info.value,
-          nome: String(descricao).trim(),
-          total: precoTotal,  // subtotal if present, else 0
-          itens: [],
-        }
-        categorias.push(currentCategoria)
-        continue
-      }
-
-      if (precoUnit === 0 && precoTotal === 0) continue
-
-      const ppu: PPUItem = {
-        item: info.value,
-        descricao: String(descricao).trim(),
-        unidade: String(row[2] ?? '').trim(),
-        qtd,
-        precoUnit,
-        precoTotal,
-      }
-      itens.push(ppu)
-      if (currentCategoria) currentCategoria.itens.push(ppu)
-    } else {
+    // Total row: e.g. [null, null, null, null, "Total", 1753418.55, ...]
+    if (isEmpty(descricao)) {
       for (let i = 0; i < row.length; i++) {
-        if (String(row[i] ?? '').trim() === 'Total') {
+        if (String(row[i] ?? '').trim().toLowerCase() === 'total') {
           for (let j = i + 1; j < row.length; j++) {
             const val = parseMoeda(row[j])
             if (val !== null && val > 0) { totalGeral = val; break }
           }
+          break
         }
       }
+      continue
     }
+
+    const qtd = parseNumero(row[3]) ?? 0
+    const precoUnit = parseMoeda(row[4]) ?? 0
+    const precoTotal = parseMoeda(row[5]) ?? 0
+
+    // Category header: item col has a top-level integer, no qty, no unit price
+    // (precoTotal may contain a subtotal shown on the category row itself)
+    if (info && info.isTop && qtd === 0 && precoUnit === 0) {
+      currentCategoria = {
+        item: info.value,
+        nome: String(descricao).trim(),
+        total: precoTotal,
+        itens: [],
+      }
+      categorias.push(currentCategoria)
+      continue
+    }
+
+    // Line item: any row with a description AND a price.
+    // In Brazilian budgets, sub-items often have an empty Item column and
+    // belong to the most recently seen category.
+    if (precoTotal === 0 && precoUnit === 0) continue
+    // Skip stray "Total" rows that happen to also have a description
+    if (String(descricao).trim().toLowerCase() === 'total') continue
+
+    const ppu: PPUItem = {
+      item: info?.value ?? (currentCategoria ? currentCategoria.itens.length + 1 : 0),
+      descricao: String(descricao).trim(),
+      unidade: String(row[2] ?? '').trim(),
+      qtd,
+      precoUnit,
+      precoTotal,
+    }
+    itens.push(ppu)
+    if (currentCategoria) currentCategoria.itens.push(ppu)
   }
 
   // Fill missing category totals from line items
