@@ -39,12 +39,15 @@ export function WorkspaceClient({
   const [pdfNome, setPdfNome] = useState(projeto.pdfNome)
   const [isUploading, setIsUploading] = useState(false)
 
-  const { messages, sendMessage, status } = useChat({
+  const { messages, sendMessage, status, error } = useChat({
     transport: new TextStreamChatTransport({
       api: '/api/chat',
       body: { projetoId: projeto.id },
     }),
     messages: initialMessages,
+    onError: (err) => {
+      console.error('[chat] error:', err)
+    },
     onFinish: async () => {
       // Refresh orcamento after each AI response
       const res = await fetch(`/api/orcamento/${projeto.id}`)
@@ -203,6 +206,7 @@ export function WorkspaceClient({
               hasPdf={hasPdf}
               onUpload={handleUpload}
               isUploading={isUploading}
+              error={error}
             />
           </div>
         </div>

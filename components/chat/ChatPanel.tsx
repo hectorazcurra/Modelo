@@ -1,7 +1,7 @@
 'use client'
 
 import { useRef, useEffect, useState } from 'react'
-import { Bot, User, Upload } from 'lucide-react'
+import { Bot, User, Upload, AlertCircle } from 'lucide-react'
 import type { UIMessage } from 'ai'
 import { ChatInput } from './ChatInput'
 
@@ -23,6 +23,7 @@ interface ChatPanelProps {
   hasPdf: boolean
   onUpload: (files: File[]) => Promise<void>
   isUploading: boolean
+  error?: Error
 }
 
 export function ChatPanel({
@@ -33,6 +34,7 @@ export function ChatPanel({
   hasPdf,
   onUpload,
   isUploading,
+  error,
 }: ChatPanelProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -112,6 +114,18 @@ export function ChatPanel({
                 <span className="w-2 h-2 rounded-full bg-amber-400/60 animate-bounce [animation-delay:150ms]" />
                 <span className="w-2 h-2 rounded-full bg-amber-400/60 animate-bounce [animation-delay:300ms]" />
               </div>
+            </div>
+          </div>
+        )}
+
+        {error && (
+          <div className="flex items-start gap-3">
+            <div className="w-7 h-7 rounded-full bg-red-500/20 border border-red-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
+              <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+            </div>
+            <div className="bg-red-500/10 border border-red-500/30 rounded-2xl rounded-tl-sm px-4 py-3 text-sm text-red-300 max-w-[85%] whitespace-pre-wrap">
+              <div className="font-medium mb-1">Erro no chat</div>
+              <div className="text-xs opacity-90">{error.message || String(error)}</div>
             </div>
           </div>
         )}

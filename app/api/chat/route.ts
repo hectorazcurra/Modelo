@@ -26,19 +26,31 @@ export async function POST(request: NextRequest) {
       take: 5,
     })
 
-    // Load historicos that have any actual data (folder was found)
-    type HistoricoRaw = { titulo: string; dados: string }
-    const historicos: HistoricoRaw[] = await prisma.$queryRaw`
-      SELECT titulo, dados
-      FROM BaseConhecimento
-      WHERE tipo = 'projeto_historico'
-      AND JSON_EXTRACT(dados, '$.pastaResolvida') IS NOT NULL
-      ORDER BY criadoEm DESC
-    `
-    const historicosFormatted = historicos.map((h) => ({
-      titulo: h.titulo,
-      dados: typeof h.dados === 'string' ? (JSON.parse(h.dados) as unknown) : h.dados,
-    }))
+    // Load historicos that have any actual data (folder was found).
+    // Wrapped in try/catch so the chat still works even if the JSON_EXTRACT
+    // query or JSON parsing fails on any row.
+    type HistoricoRaw = { titulo: string; dados: unknown }
+    let historicos: HistoricoRaw[] = []
+    try {
+      historicos = await prisma.$queryRaw<HistoricoRaw[]>`
+        SELECT titulo, dados
+        FROM BaseConhecimento
+        WHERE tipo = 'projeto_historico'
+        AND JSON_EXTRACT(dados, '$.pastaResolvida') IS NOT NULL
+        ORDER BY criadoEm DESC
+        LIMIT 30
+      `
+    } catch (err) {
+      console.error('[chat] failed to load historicos:', err)
+    }
+
+    const historicosFormatted = historicos.map((h) => {
+      let dados: unknown = h.dados
+      if (typeof dados === 'string') {
+        try { dados = JSON.parse(dados) } catch { dados = {} }
+      }
+      return { titulo: h.titulo, dados }
+    })
 
     type TextSection = { textoExtraido?: string } | null
     type PPUCategoria = { nome?: string; total?: number; itens?: unknown[] }
@@ -170,10 +182,19 @@ export async function POST(request: NextRequest) {
     // Convert UI messages to model messages
     const modelMessages = await convertToModelMessages(messages)
 
+    console.log(
+      `[chat] projeto=${projetoId} provider=${projeto.aiProvider} ` +
+      `pdfTexto=${projeto.pdfTexto?.length ?? 0}ch base=${baseTexto.length}ch ` +
+      `historicos=${historicosFormatted.length} msgs=${modelMessages.length}`,
+    )
+
     const result = streamText({
       model,
       system: systemPrompt,
       messages: modelMessages,
+      onError: (e: unknown) => {
+        console.error('[chat] streamText error:', e)
+      },
       onFinish: async ({ text }: { text: string }) => {
         const cleanText = stripOrcamentoBlock(text)
 
@@ -210,7 +231,11 @@ export async function POST(request: NextRequest) {
 
     return result.toTextStreamResponse()
   } catch (error) {
-    console.error(error)
-    return Response.json({ error: 'Erro no chat' }, { status: 500 })
+    console.error('[chat] route error:', error)
+    const message = error instanceof Error ? error.message : String(error)
+    return new Response(`Erro no chat: ${message}`, {
+      status: 500,
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    })
   }
 }
