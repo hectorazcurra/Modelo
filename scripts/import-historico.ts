@@ -9,11 +9,23 @@ import {
   extractDashboard,
   extractPPU,
   extractTarefas,
+  extractWorkbookText,
+  extractAreaM2,
   type DashboardData,
   type PPUData,
   type EquipeTarefa,
 } from '../lib/excel/extractor'
 import { extractDocRecFolder, type DocRecExtraction } from '../lib/extractors/docs'
+
+// ─── Folder name candidates per section ──────────────────────────────────────
+
+const DOC_REC_NAMES   = ['01. Doc. Rec', '01. Doc Rec', '01.Doc.Rec', '01. Documentos Recebidos', '01. Doc.Rec']
+const ORCAMENTO_NAMES = ['02. Orçamento', '02. Orcamento', '02 Orçamento', '02.Orcamento']
+const SUPRIM_NAMES    = ['03. Suprimentos', '03 Suprimentos', '03.Suprimentos']
+const ENGENH_NAMES    = ['04. Engenharia', '04. Engenharia e Projetos', '04 Engenharia', '04.Engenharia']
+const PROP_NAMES      = ['05. Propostas', '05 Propostas', '05.Propostas', '05. Proposta']
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 interface IndexProjeto {
   os: string
@@ -29,6 +41,13 @@ interface IndexProjeto {
   nomePasta: string
 }
 
+interface FolderSection {
+  text: string
+  arquivos: number
+  bytes: number
+  truncado: boolean
+}
+
 interface ImportRecord {
   csv: IndexProjeto
   pasta: string | null
@@ -37,25 +56,23 @@ interface ImportRecord {
   dashboard: DashboardData | null
   ppu: PPUData | null
   equipes: EquipeTarefa[] | null
-  docRec: DocRecExtraction | null
+  // Per-folder extractions
+  docRec: FolderSection | null
+  suprimentos: FolderSection | null
+  engenharia: FolderSection | null
+  propostas: FolderSection | null
+  outrosOrcamento: FolderSection | null
+  // Derived
+  areaM2: number | null
   erro: string | null
 }
 
-// ─── CLI args ────────────────────────────────────────────────────────────────
+// ─── CLI args ─────────────────────────────────────────────────────────────────
 
-function parseArgs(): {
-  index: string
-  dir: string
-  dryRun: boolean
-  limit: number | null
-  os: string | null
-} {
+function parseArgs() {
   const argv = process.argv.slice(2)
-  let index = ''
-  let dir = '/var/lib/metodo/arquivos/'
-  let dryRun = false
-  let limit: number | null = null
-  let os: string | null = null
+  let index = '', dir = '/var/lib/metodo/arquivos/'
+  let dryRun = false, limit: number | null = null, os: string | null = null
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -75,15 +92,12 @@ function parseArgs(): {
   return { index, dir, dryRun, limit, os }
 }
 
-// ─── Number parsing ──────────────────────────────────────────────────────────
+// ─── Number / string utils ────────────────────────────────────────────────────
 
 function parseNum(v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null
   if (typeof v === 'number') return Number.isFinite(v) ? v : null
-  const s = String(v)
-    .replace(/[R$\s%"]/g, '')
-    .replace(/\./g, '')
-    .replace(',', '.')
+  const s = String(v).replace(/[R$\s%"]/g, '').replace(/\./g, '').replace(',', '.')
   const n = parseFloat(s)
   return Number.isFinite(n) ? n : null
 }
@@ -93,22 +107,15 @@ function str(v: unknown): string {
   return String(v).trim()
 }
 
-// ─── Normalize text for column matching ──────────────────────────────────────
-
 function norm(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    .trim()
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
 }
 
-// ─── Read index from XLSX ────────────────────────────────────────────────────
+// ─── Read index from XLSX ─────────────────────────────────────────────────────
 
 function readIndexXlsx(filePath: string): IndexProjeto[] {
   const wb = XLSX.readFile(filePath, { cellDates: false, raw: true })
 
-  // Try to find the right sheet: prefer one named FUP, Projetos, Dados, or use first
   const sheetName =
     wb.SheetNames.find((n) =>
       ['fup', 'projetos', 'dados', 'comercial', 'base'].some((k) => norm(n).includes(k))
@@ -117,214 +124,254 @@ function readIndexXlsx(filePath: string): IndexProjeto[] {
   const sheet = wb.Sheets[sheetName]
   if (!sheet) throw new Error(`Aba não encontrada no arquivo: ${filePath}`)
 
-  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: null,
-    blankrows: false,
-    raw: true,
-  })
+  const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, blankrows: false, raw: true })
 
-  // Find the header row: the first row that has "cliente" AND ("número" OR "pasta") in any cell
   let headerRowIdx = -1
-  const REQUIRED = ['cliente']
-  const ANY_OF = ['numero', 'n°', 'n.', 'pasta', 'produto']
-
   for (let r = 0; r < Math.min(rows.length, 30); r++) {
     const cells = rows[r].map((c) => norm(str(c)))
-    const hasRequired = REQUIRED.every((req) => cells.some((c) => c.includes(req)))
-    const hasAny = ANY_OF.some((key) => cells.some((c) => c.includes(key)))
-    if (hasRequired && hasAny) {
-      headerRowIdx = r
-      break
-    }
+    const hasCliente = cells.some((c) => c.includes('cliente'))
+    const hasId = ['numero', 'n°', 'n.', 'pasta', 'produto'].some((k) => cells.some((c) => c.includes(k)))
+    if (hasCliente && hasId) { headerRowIdx = r; break }
   }
 
-  if (headerRowIdx < 0) {
-    throw new Error(
-      `Não foi possível encontrar o cabeçalho no arquivo ${path.basename(filePath)}.\n` +
-        `Primeiros 5 valores da linha 1: ${rows[0]?.slice(0, 5).join(' | ')}`
-    )
-  }
+  if (headerRowIdx < 0) throw new Error('Cabeçalho não encontrado no arquivo índice')
 
   const header = rows[headerRowIdx].map((c) => norm(str(c)))
-  console.log(`  Cabeçalho encontrado na linha ${headerRowIdx + 1}: ${header.filter(Boolean).slice(0, 8).join(' | ')}`)
+  console.log(`  Cabeçalho na linha ${headerRowIdx + 1}: ${header.filter(Boolean).slice(0, 8).join(' | ')}`)
 
-  // Map columns by normalized name patterns
   function col(...needles: string[]): number {
     for (let i = 0; i < header.length; i++) {
       if (needles.some((n) => header[i] === n || header[i].startsWith(n))) return i
     }
-    // fallback: partial match
     for (let i = 0; i < header.length; i++) {
       if (needles.some((n) => header[i].includes(n))) return i
     }
     return -1
   }
 
-  const colOS = col('numero', 'n°', 'n.o', 'codigo', 'os')
+  const colOS      = col('numero', 'n°', 'n.o', 'codigo', 'os')
   const colCliente = col('cliente')
   const colProjeto = col('projeto/unidade', 'projeto', 'unidade')
-  const colDescricao = col('descricao', 'desc')
-  const colTipologia = col('tipologia')
-  const colProduto = col('produto')
-  const colValor = col('valor orcado', 'valor')
-  const colMargem = col('margem')
-  const colResultado = col('resultado')
-  const colStatus = col('status comercial', 'status')
-  const colPasta = col('nome da pasta', 'pasta')
-
-  console.log(
-    `  Colunas: OS=${colOS} Cliente=${colCliente} Produto=${colProduto} Pasta=${colPasta} Status=${colStatus}`
-  )
-
-  if (colOS < 0 || colCliente < 0) {
-    throw new Error(
-      `Colunas obrigatórias não encontradas. Cabeçalho detectado:\n${header.join(' | ')}`
-    )
-  }
+  const colDesc    = col('descricao', 'desc')
+  const colTipo    = col('tipologia')
+  const colProd    = col('produto')
+  const colValor   = col('valor orcado', 'valor')
+  const colMargem  = col('margem')
+  const colResult  = col('resultado')
+  const colStatus  = col('status comercial', 'status')
+  const colPasta   = col('nome da pasta', 'pasta')
 
   const projetos: IndexProjeto[] = []
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r]
     const os = str(row[colOS])
     if (!os || os === '-') continue
-    // Skip rows that look like sub-totals or category headers (no numeric OS)
     const cliente = str(row[colCliente])
     if (!cliente) continue
-
     projetos.push({
-      os,
-      cliente,
+      os, cliente,
       projetoUnidade: colProjeto >= 0 ? str(row[colProjeto]) : '',
-      descricao: colDescricao >= 0 ? str(row[colDescricao]) : '',
-      tipologia: colTipologia >= 0 ? str(row[colTipologia]) : '',
-      produto: colProduto >= 0 ? str(row[colProduto]) : '',
-      valorOrcado: colValor >= 0 ? parseNum(row[colValor]) : null,
-      margem: colMargem >= 0 ? parseNum(row[colMargem]) : null,
-      resultado: colResultado >= 0 ? parseNum(row[colResultado]) : null,
+      descricao:      colDesc >= 0    ? str(row[colDesc]) : '',
+      tipologia:      colTipo >= 0    ? str(row[colTipo]) : '',
+      produto:        colProd >= 0    ? str(row[colProd]) : '',
+      valorOrcado:    colValor >= 0   ? parseNum(row[colValor]) : null,
+      margem:         colMargem >= 0  ? parseNum(row[colMargem]) : null,
+      resultado:      colResult >= 0  ? parseNum(row[colResult]) : null,
       statusComercial: colStatus >= 0 ? str(row[colStatus]) : '',
-      nomePasta: colPasta >= 0 ? str(row[colPasta]) : '',
+      nomePasta:      colPasta >= 0   ? str(row[colPasta]) : '',
     })
   }
-
   return projetos
 }
 
-// ─── Project folder resolution ───────────────────────────────────────────────
+// ─── Folder helpers ───────────────────────────────────────────────────────────
 
 function findProjectFolder(baseDir: string, proj: IndexProjeto): string | null {
-  // 1. Try nomePasta exact match
   if (proj.nomePasta) {
     const p = path.join(baseDir, proj.nomePasta)
     if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p
   }
-
   if (!fs.existsSync(baseDir)) return null
-
-  // 2. Scan directory for folder starting with the OS number
-  const entries = fs.readdirSync(baseDir, { withFileTypes: true })
-  for (const e of entries) {
+  for (const e of fs.readdirSync(baseDir, { withFileTypes: true })) {
     if (!e.isDirectory()) continue
-    if (
-      e.name === proj.os ||
-      e.name.startsWith(proj.os + ' ') ||
-      e.name.startsWith(proj.os + '-') ||
-      e.name.startsWith(proj.os + '_')
-    ) {
+    if (e.name === proj.os || e.name.startsWith(proj.os + ' ') ||
+        e.name.startsWith(proj.os + '-') || e.name.startsWith(proj.os + '_')) {
       return path.join(baseDir, e.name)
     }
   }
   return null
 }
 
-function findLatestPricingXlsx(projectFolder: string): { xlsx: string; rev: string } | null {
-  const orcamentoDirs = ['02. Orçamento', '02 Orçamento', '02. Orcamento', '02.Orcamento']
-  let orcamentoPath: string | null = null
-  for (const o of orcamentoDirs) {
-    const candidate = path.join(projectFolder, o)
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isDirectory()) {
-      orcamentoPath = candidate
-      break
-    }
-  }
-  if (!orcamentoPath) return null
-
-  const revs = fs
-    .readdirSync(orcamentoPath, { withFileTypes: true })
-    .filter((e) => e.isDirectory() && /^Rev\.?\s*\d+/i.test(e.name) && !/obsoleto/i.test(e.name))
-    .map((e) => {
-      const m = e.name.match(/Rev\.?\s*(\d+)/i)
-      return { name: e.name, num: m ? parseInt(m[1], 10) : -1 }
-    })
-    .filter((r) => r.num >= 0)
-    .sort((a, b) => b.num - a.num)
-
-  for (const rev of revs) {
-    const revPath = path.join(orcamentoPath, rev.name)
-    const files = fs
-      .readdirSync(revPath)
-      .filter((f) => /^Pricing.*\.xlsx?$/i.test(f) && !f.startsWith('~$'))
-    if (files.length > 0) {
-      files.sort()
-      return { xlsx: path.join(revPath, files[files.length - 1]), rev: rev.name }
-    }
+function findSubfolder(projectFolder: string, candidates: string[]): string | null {
+  for (const name of candidates) {
+    const p = path.join(projectFolder, name)
+    if (fs.existsSync(p) && fs.statSync(p).isDirectory()) return p
   }
   return null
 }
 
-// ─── Per-project processing ──────────────────────────────────────────────────
+// Find the latest non-obsolete Rev.N subfolder
+function findLatestRevFolder(folder: string): string | null {
+  try {
+    const revs = fs.readdirSync(folder, { withFileTypes: true })
+      .filter((e) => e.isDirectory() && /^Rev\.?\s*\d+/i.test(e.name) && !/obsoleto/i.test(e.name))
+      .map((e) => {
+        const m = e.name.match(/Rev\.?\s*(\d+)/i)
+        return { name: e.name, num: m ? parseInt(m[1], 10) : -1 }
+      })
+      .filter((r) => r.num >= 0)
+      .sort((a, b) => b.num - a.num)
+    return revs.length > 0 ? path.join(folder, revs[0].name) : null
+  } catch {
+    return null
+  }
+}
+
+function findLatestPricingXlsx(projectFolder: string): { xlsx: string; rev: string; revPath: string } | null {
+  const orcPath = findSubfolder(projectFolder, ORCAMENTO_NAMES)
+  if (!orcPath) return null
+
+  const latestRev = findLatestRevFolder(orcPath)
+  if (!latestRev) return null
+
+  const revName = path.basename(latestRev)
+  const files = fs.readdirSync(latestRev)
+    .filter((f) => /^Pricing.*\.xlsx?$/i.test(f) && !f.startsWith('~$'))
+    .sort()
+  if (!files.length) return null
+  return { xlsx: path.join(latestRev, files[files.length - 1]), rev: revName, revPath: latestRev }
+}
+
+// ─── Folder text extraction wrapper ──────────────────────────────────────────
+
+async function extractSection(
+  folder: string | null,
+  maxBytes: number,
+  excludePatterns: RegExp[] = [],
+): Promise<FolderSection | null> {
+  if (!folder || !fs.existsSync(folder)) return null
+  try {
+    const result = await extractDocRecFolder(folder, maxBytes, excludePatterns)
+    if (!result.textoConcatenado.trim() && result.arquivos.length === 0) return null
+    return {
+      text: result.textoConcatenado,
+      arquivos: result.arquivos.length,
+      bytes: result.totalBytesTexto,
+      truncado: result.truncado,
+    }
+  } catch {
+    return null
+  }
+}
+
+// Read other XLSX files in Orçamento Rev folder (Composição Equipe, etc.)
+async function extractOutrosOrcamento(revPath: string): Promise<FolderSection | null> {
+  try {
+    const files = fs.readdirSync(revPath)
+      .filter((f) => /\.xlsx?$/i.test(f) && !f.startsWith('~$') && !/^Pricing/i.test(f))
+    if (!files.length) return null
+
+    const parts: string[] = []
+    let totalBytes = 0
+    const MAX = 20_000
+
+    for (const f of files) {
+      try {
+        const buf = fs.readFileSync(path.join(revPath, f))
+        const wb = XLSX.read(buf, { type: 'buffer' })
+        const text = extractWorkbookText(wb)
+        if (text.trim()) {
+          const piece = `\n\n=== ${f} ===\n${text}`
+          parts.push(piece)
+          totalBytes += Buffer.byteLength(piece, 'utf-8')
+          if (totalBytes >= MAX) break
+        }
+      } catch {
+        // skip unreadable files
+      }
+    }
+
+    if (!parts.length) return null
+    const combined = parts.join('').trim()
+    return {
+      text: combined,
+      arquivos: files.length,
+      bytes: Buffer.byteLength(combined, 'utf-8'),
+      truncado: totalBytes >= MAX,
+    }
+  } catch {
+    return null
+  }
+}
+
+// ─── Per-project processing ───────────────────────────────────────────────────
 
 async function processProject(baseDir: string, proj: IndexProjeto): Promise<ImportRecord> {
   const rec: ImportRecord = {
-    csv: proj,
-    pasta: null,
-    arquivoXlsx: null,
-    revisao: null,
-    dashboard: null,
-    ppu: null,
-    equipes: null,
-    docRec: null,
-    erro: null,
+    csv: proj, pasta: null, arquivoXlsx: null, revisao: null,
+    dashboard: null, ppu: null, equipes: null,
+    docRec: null, suprimentos: null, engenharia: null, propostas: null, outrosOrcamento: null,
+    areaM2: null, erro: null,
   }
 
   try {
     const folder = findProjectFolder(baseDir, proj)
-    if (!folder) {
-      rec.erro = 'Pasta não encontrada'
-      return rec
-    }
+    if (!folder) { rec.erro = 'Pasta não encontrada'; return rec }
     rec.pasta = folder
 
-    const docRecCandidates = ['01. Doc. Rec', '01. Doc Rec', '01.Doc.Rec', '01. Documentos Recebidos']
-    for (const d of docRecCandidates) {
-      const docRecPath = path.join(folder, d)
-      if (fs.existsSync(docRecPath)) {
-        try {
-          rec.docRec = await extractDocRecFolder(docRecPath)
-        } catch (err) {
-          rec.docRec = {
-            textoConcatenado: `[erro: ${err instanceof Error ? err.message : String(err)}]`,
-            arquivos: [],
-            totalBytesTexto: 0,
-            truncado: false,
-          }
-        }
-        break
-      }
+    // ── 01. Doc. Rec (carta convite, visita técnica, questionamentos) ──
+    rec.docRec = await extractSection(
+      findSubfolder(folder, DOC_REC_NAMES),
+      45_000,  // increased: richest context
+    )
+
+    // ── 03. Suprimentos (cotações, materiais, fornecedores) ──
+    rec.suprimentos = await extractSection(
+      findSubfolder(folder, SUPRIM_NAMES),
+      25_000,
+    )
+
+    // ── 04. Engenharia (specs técnicas, cronogramas) ──
+    rec.engenharia = await extractSection(
+      findSubfolder(folder, ENGENH_NAMES),
+      15_000,
+    )
+
+    // ── 05. Propostas — apenas a última revisão ──
+    const propFolder = findSubfolder(folder, PROP_NAMES)
+    if (propFolder) {
+      const latestPropRev = findLatestRevFolder(propFolder) ?? propFolder
+      rec.propostas = await extractSection(latestPropRev, 25_000)
     }
 
+    // ── 02. Orçamento — Pricing XLSX (estruturado) ──
     const found = findLatestPricingXlsx(folder)
     if (!found) {
       rec.erro = 'Pricing_*.xlsx não encontrado em 02. Orçamento'
-      return rec
-    }
-    rec.arquivoXlsx = found.xlsx
-    rec.revisao = found.rev
+      // Don't return — other folders may still have valuable data
+    } else {
+      rec.arquivoXlsx = found.xlsx
+      rec.revisao = found.rev
+      try {
+        const wb = readPricingWorkbook(found.xlsx)
+        rec.dashboard = extractDashboard(wb)
+        rec.ppu = extractPPU(wb)
+        rec.equipes = extractTarefas(wb)
+      } catch (err) {
+        rec.erro = `Erro ao ler Pricing: ${err instanceof Error ? err.message : String(err)}`
+      }
 
-    const wb = readPricingWorkbook(found.xlsx)
-    rec.dashboard = extractDashboard(wb)
-    rec.ppu = extractPPU(wb)
-    rec.equipes = extractTarefas(wb)
+      // ── Outros XLSXs no folder de orçamento (Composição Equipe, etc.) ──
+      rec.outrosOrcamento = await extractOutrosOrcamento(found.revPath)
+    }
+
+    // ── m² — busca em todos os textos extraídos ──
+    const allText = [
+      rec.docRec?.text, rec.propostas?.text, rec.outrosOrcamento?.text, rec.engenharia?.text,
+    ].filter(Boolean).join(' ')
+
+    rec.areaM2 = extractAreaM2(allText) ?? (rec.dashboard?.areaM2 ?? null)
+
   } catch (err) {
     rec.erro = err instanceof Error ? err.message : String(err)
   }
@@ -332,49 +379,56 @@ async function processProject(baseDir: string, proj: IndexProjeto): Promise<Impo
   return rec
 }
 
-// ─── Build DB record ─────────────────────────────────────────────────────────
+// ─── Build DB record ──────────────────────────────────────────────────────────
 
 function buildTitulo(proj: IndexProjeto): string {
-  const parts = [`OS ${proj.os}`]
-  if (proj.cliente) parts.push(proj.cliente)
-  if (proj.descricao) parts.push(proj.descricao)
-  return parts.join(' - ').slice(0, 250)
+  return [`OS ${proj.os}`, proj.cliente, proj.descricao].filter(Boolean).join(' - ').slice(0, 250)
+}
+
+function sectionToDados(s: FolderSection | null) {
+  if (!s) return null
+  return { textoExtraido: s.text, arquivos: s.arquivos, totalBytes: s.bytes, truncado: s.truncado }
 }
 
 function buildDados(rec: ImportRecord) {
-  const { csv: proj, dashboard, ppu, equipes, arquivoXlsx, revisao, pasta, docRec } = rec
+  const { csv: p, dashboard, ppu, equipes, arquivoXlsx, revisao, pasta } = rec
   return {
-    os: proj.os,
-    cliente: proj.cliente,
-    projetoUnidade: proj.projetoUnidade,
-    descricao: proj.descricao,
-    tipologia: proj.tipologia,
-    produto: proj.produto,
-    valorOrcado: proj.valorOrcado,
-    margem: proj.margem,
-    resultado: proj.resultado,
-    statusComercial: proj.statusComercial,
-    nomePasta: proj.nomePasta,
+    // Index fields
+    os: p.os, cliente: p.cliente, projetoUnidade: p.projetoUnidade,
+    descricao: p.descricao, tipologia: p.tipologia, produto: p.produto,
+    valorOrcado: p.valorOrcado, margem: p.margem, resultado: p.resultado,
+    statusComercial: p.statusComercial, nomePasta: p.nomePasta,
+
+    // Resolved paths
     pastaResolvida: pasta,
     arquivoXlsx: arquivoXlsx ? path.basename(arquivoXlsx) : null,
     revisao,
-    dashboard,
+
+    // Pricing XLSX — structured data
+    dashboard: dashboard ?? null,
     itens: ppu?.itens ?? null,
+    categorias: ppu?.categorias ?? null,
     totalGeralPPU: ppu?.totalGeral ?? null,
+    mobilizacao: ppu?.mobilizacao ?? null,
+    despesasOperacionais: ppu?.despesasOperacionais ?? null,
+    maoDeObraCategoria: ppu?.maoDeObra ?? null,
     equipes: equipes ?? null,
-    cartaConvite: docRec
-      ? {
-          textoExtraido: docRec.textoConcatenado,
-          arquivos: docRec.arquivos,
-          totalBytes: docRec.totalBytesTexto,
-          truncado: docRec.truncado,
-        }
-      : null,
+
+    // Per-folder extracted text
+    cartaConvite:    sectionToDados(rec.docRec),
+    suprimentos:     sectionToDados(rec.suprimentos),
+    engenharia:      sectionToDados(rec.engenharia),
+    propostas:       sectionToDados(rec.propostas),
+    outrosOrcamento: sectionToDados(rec.outrosOrcamento),
+
+    // Derived
+    areaM2: rec.areaM2,
+
     importadoEm: new Date().toISOString(),
   }
 }
 
-// ─── Main ────────────────────────────────────────────────────────────────────
+// ─── Main ─────────────────────────────────────────────────────────────────────
 
 async function main() {
   const args = parseArgs()
@@ -392,38 +446,46 @@ async function main() {
     process.exit(1)
   }
 
-  console.log(`\n${projetos.length} projetos lidos do índice.\n`)
+  console.log(`${projetos.length} projetos lidos do índice.\n`)
 
   let filtrados = projetos
   if (args.os) {
     filtrados = projetos.filter((p) => p.os.startsWith(args.os!))
-    console.log(`Filtrando por OS prefixo "${args.os}": ${filtrados.length} projetos.\n`)
+    console.log(`Filtrando por OS "${args.os}": ${filtrados.length} projetos.\n`)
   }
   const lista = args.limit ? filtrados.slice(0, args.limit) : filtrados
-  const records: ImportRecord[] = []
 
+  const records: ImportRecord[] = []
   for (const proj of lista) {
     const rec = await processProject(args.dir, proj)
     records.push(rec)
-    const docInfo = rec.docRec
-      ? `  doc=${rec.docRec.arquivos.length}/${(rec.docRec.totalBytesTexto / 1024).toFixed(1)}KB`
-      : ''
-    const status = rec.erro
-      ? `ERRO: ${rec.erro}${docInfo}`
-      : `OK  rev=${rec.revisao}  equipes=${rec.equipes?.length ?? 0}  ppu=${rec.ppu?.itens.length ?? 0}${docInfo}`
-    const label = `${proj.os} ${proj.cliente}`.slice(0, 40).padEnd(40)
-    console.log(`  ${label} → ${status}`)
+
+    const kb = (s: FolderSection | null) => s ? `${s.arquivos}/${(s.bytes / 1024).toFixed(0)}KB` : '-'
+    const label = `${proj.os} ${proj.cliente}`.slice(0, 38).padEnd(38)
+    const info = rec.pasta
+      ? [
+          `doc=${kb(rec.docRec)}`,
+          `supr=${kb(rec.suprimentos)}`,
+          `prop=${kb(rec.propostas)}`,
+          `ppu=${rec.ppu?.itens.length ?? 0}`,
+          `eq=${rec.equipes?.length ?? 0}`,
+          rec.areaM2 ? `m²=${rec.areaM2}` : '',
+        ].filter(Boolean).join('  ')
+      : `ERRO: ${rec.erro}`
+
+    console.log(`  ${label} → ${info}`)
   }
 
-  const ok = records.filter((r) => !r.erro)
-  const erros = records.filter((r) => r.erro)
-  console.log(`\nResumo: ${ok.length} OK, ${erros.length} com erro.`)
+  const ok    = records.filter((r) => r.pasta)
+  const erros = records.filter((r) => !r.pasta)
+  console.log(`\nResumo: ${ok.length} com pasta encontrada, ${erros.length} sem pasta.`)
 
   if (args.dryRun) {
     console.log('\n[DRY-RUN] Nada foi gravado.')
-    if (ok[0]) {
-      console.log('\nExemplo do primeiro registro OK:')
-      console.log(JSON.stringify(buildDados(ok[0]), null, 2).slice(0, 2000))
+    const first = ok[0]
+    if (first) {
+      console.log('\nExemplo do primeiro registro:')
+      console.log(JSON.stringify(buildDados(first), null, 2).slice(0, 3000))
     }
     return
   }
@@ -436,11 +498,9 @@ async function main() {
     for (const rec of records) {
       const titulo = buildTitulo(rec.csv)
       const dados = buildDados(rec)
-
       await prisma.baseConhecimento.deleteMany({
         where: { tipo: 'projeto_historico', titulo: { startsWith: `OS ${rec.csv.os}` } },
       })
-
       await prisma.baseConhecimento.create({
         data: {
           tipo: 'projeto_historico',

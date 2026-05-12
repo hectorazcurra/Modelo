@@ -12,6 +12,12 @@ export interface DashboardData {
   precoPorMes: number | null
   hhMOD: number | null
   custoMaoDeObraDireta: number | null
+  custoTotal: number | null
+  margemValor: number | null
+  margemPerc: number | null
+  impostos: number | null
+  bdi: number | null
+  areaM2: number | null
 }
 
 export interface PPUItem {
@@ -23,9 +29,20 @@ export interface PPUItem {
   precoTotal: number
 }
 
+export interface PPUCategoria {
+  item: number
+  nome: string
+  total: number
+  itens: PPUItem[]
+}
+
 export interface PPUData {
   itens: PPUItem[]
+  categorias: PPUCategoria[]
   totalGeral: number | null
+  mobilizacao: number | null
+  despesasOperacionais: number | null
+  maoDeObra: number | null
 }
 
 export interface EquipeTarefa {
@@ -67,12 +84,7 @@ function normalizeNumberString(raw: string): string {
       s = s.replace(/,/g, '')
     }
   } else if (lastComma >= 0) {
-    const afterComma = s.length - lastComma - 1
-    if (afterComma === 3 && !/^[\-+]?[0-9]{1,3},[0-9]{3}$/.test(s)) {
-      s = s.replace(',', '.')
-    } else {
-      s = s.replace(',', '.')
-    }
+    s = s.replace(',', '.')
   }
   return s
 }
@@ -96,9 +108,10 @@ function parseNumero(v: Cell): number | null {
 }
 
 function findCellValueAfter(rows: Cell[][], label: string): Cell {
+  const labelNorm = label.toLowerCase().trim()
   for (const row of rows) {
     for (let i = 0; i < row.length; i++) {
-      if (String(row[i] ?? '').trim() === label) {
+      if (String(row[i] ?? '').toLowerCase().trim() === labelNorm) {
         for (let j = i + 1; j < row.length; j++) {
           if (!isEmpty(row[j])) return row[j]
         }
@@ -109,10 +122,26 @@ function findCellValueAfter(rows: Cell[][], label: string): Cell {
 }
 
 function findRowWithLabel(rows: Cell[][], label: string): { row: Cell[]; col: number } | null {
+  const labelNorm = label.toLowerCase().trim()
   for (const row of rows) {
     for (let i = 0; i < row.length; i++) {
-      if (String(row[i] ?? '').trim() === label) {
+      if (String(row[i] ?? '').toLowerCase().trim() === labelNorm) {
         return { row, col: i }
+      }
+    }
+  }
+  return null
+}
+
+// Search for a label with partial/flexible matching
+function findCellValueAfterPartial(rows: Cell[][], ...needles: string[]): Cell {
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i++) {
+      const cell = String(row[i] ?? '').toLowerCase().trim()
+      if (needles.some((n) => cell.includes(n.toLowerCase()))) {
+        for (let j = i + 1; j < row.length; j++) {
+          if (!isEmpty(row[j])) return row[j]
+        }
       }
     }
   }
@@ -123,27 +152,14 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
   const sheet = workbook.Sheets['Dashboard']
   if (!sheet) {
     return {
-      cliente: null,
-      projeto: null,
-      unidade: null,
-      municipio: null,
-      uf: null,
-      prazoContrato: null,
-      prazoUnidade: null,
-      precoVenda: null,
-      precoPorMes: null,
-      hhMOD: null,
-      custoMaoDeObraDireta: null,
+      cliente: null, projeto: null, unidade: null, municipio: null, uf: null,
+      prazoContrato: null, prazoUnidade: null, precoVenda: null, precoPorMes: null,
+      hhMOD: null, custoMaoDeObraDireta: null, custoTotal: null,
+      margemValor: null, margemPerc: null, impostos: null, bdi: null, areaM2: null,
     }
   }
 
   const rows = sheetToRows(sheet)
-
-  const cliente = findCellValueAfter(rows, 'Cliente')
-  const projeto = findCellValueAfter(rows, 'Projeto')
-  const unidade = findCellValueAfter(rows, 'Unidade')
-  const municipio = findCellValueAfter(rows, 'Município')
-  const uf = findCellValueAfter(rows, 'UF')
 
   const prazoLoc = findRowWithLabel(rows, 'Prazo do Contrato')
   let prazoContrato: number | null = null
@@ -157,27 +173,49 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
     if (after.length > 1) prazoUnidade = String(after[1] ?? '').trim() || null
   }
 
+  // Margin: try both percentage and value forms
+  const margemRaw = findCellValueAfterPartial(rows, 'margem líquida', 'margem')
+  const margemVal = parseMoeda(margemRaw)
+  const margemPerc = margemVal !== null && Math.abs(margemVal) <= 1 ? margemVal : null
+  const margemValor = margemVal !== null && Math.abs(margemVal) > 1 ? margemVal : null
+
+  // Area: look for m² label
+  const areaRaw = findCellValueAfterPartial(rows, 'área', 'area total', 'm²', 'metragem')
+  const areaVal = parseNumero(areaRaw)
+
   return {
-    cliente: cliente ? String(cliente).trim() : null,
-    projeto: projeto ? String(projeto).trim() : null,
-    unidade: unidade ? String(unidade).trim() : null,
-    municipio: municipio ? String(municipio).trim() : null,
-    uf: uf ? String(uf).trim() : null,
+    cliente: String(findCellValueAfter(rows, 'Cliente') ?? '').trim() || null,
+    projeto: String(findCellValueAfter(rows, 'Projeto') ?? '').trim() || null,
+    unidade: String(findCellValueAfter(rows, 'Unidade') ?? '').trim() || null,
+    municipio: String(findCellValueAfter(rows, 'Município') ?? '').trim() || null,
+    uf: String(findCellValueAfter(rows, 'UF') ?? '').trim() || null,
     prazoContrato,
     prazoUnidade,
     precoVenda: parseMoeda(findCellValueAfter(rows, 'Preço de Venda')),
     precoPorMes: parseMoeda(findCellValueAfter(rows, 'Preço por Mês')),
     hhMOD: parseNumero(findCellValueAfter(rows, 'Horas Normais MOD')),
     custoMaoDeObraDireta: parseMoeda(findCellValueAfter(rows, 'Mão de Obra Direta')),
+    custoTotal: parseMoeda(
+      findCellValueAfterPartial(rows, 'custo total', 'custo direto', 'custo do projeto')
+    ),
+    margemValor,
+    margemPerc,
+    impostos: parseMoeda(findCellValueAfterPartial(rows, 'impostos', 'imposto', 'iss', 'pis/cofins')),
+    bdi: parseNumero(findCellValueAfterPartial(rows, 'bdi')),
+    areaM2: areaVal && areaVal > 1 && areaVal < 5_000_000 ? areaVal : null,
   }
 }
 
 export function extractPPU(workbook: XLSX.WorkBook): PPUData {
   const sheet = workbook.Sheets['PPU']
-  if (!sheet) return { itens: [], totalGeral: null }
+  if (!sheet) {
+    return { itens: [], categorias: [], totalGeral: null, mobilizacao: null, despesasOperacionais: null, maoDeObra: null }
+  }
 
   const rows = sheetToRows(sheet)
   const itens: PPUItem[] = []
+  const categorias: PPUCategoria[] = []
+  let currentCategoria: PPUCategoria | null = null
   let totalGeral: number | null = null
 
   for (const row of rows) {
@@ -188,31 +226,57 @@ export function extractPPU(workbook: XLSX.WorkBook): PPUData {
       const qtd = parseNumero(row[3]) ?? 0
       const precoUnit = parseMoeda(row[4]) ?? 0
       const precoTotal = parseMoeda(row[5]) ?? 0
+
+      // Category header: whole-number item with no price
+      if (Number.isInteger(first) && precoUnit === 0 && precoTotal === 0) {
+        currentCategoria = { item: first, nome: String(descricao).trim(), total: 0, itens: [] }
+        categorias.push(currentCategoria)
+        continue
+      }
+
       if (precoUnit === 0 && precoTotal === 0) continue
-      itens.push({
+
+      const ppu: PPUItem = {
         item: first,
         descricao: String(descricao).trim(),
         unidade: String(row[2] ?? '').trim(),
         qtd,
         precoUnit,
         precoTotal,
-      })
+      }
+      itens.push(ppu)
+      if (currentCategoria) {
+        currentCategoria.itens.push(ppu)
+        currentCategoria.total += precoTotal
+      }
     } else {
       for (let i = 0; i < row.length; i++) {
         if (String(row[i] ?? '').trim() === 'Total') {
           for (let j = i + 1; j < row.length; j++) {
             const val = parseMoeda(row[j])
-            if (val !== null && val > 0) {
-              totalGeral = val
-              break
-            }
+            if (val !== null && val > 0) { totalGeral = val; break }
           }
         }
       }
     }
   }
 
-  return { itens, totalGeral }
+  // Aggregate well-known category buckets
+  function catSum(...keywords: string[]): number | null {
+    const total = categorias
+      .filter((c) => keywords.some((k) => c.nome.toLowerCase().includes(k.toLowerCase())))
+      .reduce((s, c) => s + c.total, 0)
+    return total > 0 ? total : null
+  }
+
+  return {
+    itens,
+    categorias,
+    totalGeral,
+    mobilizacao: catSum('mobiliz', 'desmobiliz'),
+    despesasOperacionais: catSum('despesa', 'operacional', 'overhead'),
+    maoDeObra: catSum('mão de obra', 'mao de obra', 'equipe', 'pessoal'),
+  }
 }
 
 export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
@@ -223,15 +287,7 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
   const equipes: EquipeTarefa[] = []
 
   let headerRowIdx = -1
-  let cols = {
-    item: -1,
-    descricao: -1,
-    sigla: -1,
-    disciplina: -1,
-    hhTotal: -1,
-    custoTotal: -1,
-    custoHora: -1,
-  }
+  let cols = { item: -1, descricao: -1, sigla: -1, disciplina: -1, hhTotal: -1, custoTotal: -1, custoHora: -1 }
 
   for (let r = 0; r < rows.length; r++) {
     const row = rows[r]
@@ -263,18 +319,13 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
     const item = typeof itemRaw === 'number' ? itemRaw : parseNumero(itemRaw)
     const descricao = row[cols.descricao]
     if (item === null || isEmpty(descricao)) continue
-
     const totalHH = parseNumero(cols.hhTotal >= 0 ? row[cols.hhTotal] : null) ?? 0
     if (totalHH <= 0) continue
-
     equipes.push({
       item,
       nome: String(descricao).trim(),
       sigla: cols.sigla >= 0 && !isEmpty(row[cols.sigla]) ? String(row[cols.sigla]).trim() : null,
-      disciplina:
-        cols.disciplina >= 0 && !isEmpty(row[cols.disciplina])
-          ? String(row[cols.disciplina]).trim()
-          : null,
+      disciplina: cols.disciplina >= 0 && !isEmpty(row[cols.disciplina]) ? String(row[cols.disciplina]).trim() : null,
       totalHH,
       custoTotal: parseMoeda(cols.custoTotal >= 0 ? row[cols.custoTotal] : null) ?? 0,
       custoPorHH: parseMoeda(cols.custoHora >= 0 ? row[cols.custoHora] : null) ?? 0,
@@ -286,4 +337,34 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
 
 export function readPricingWorkbook(filePath: string): XLSX.WorkBook {
   return XLSX.readFile(filePath, { cellDates: false, cellNF: false, cellFormula: false })
+}
+
+// Extract all text from a workbook as CSV per sheet (for non-Pricing files)
+export function extractWorkbookText(wb: XLSX.WorkBook): string {
+  const parts: string[] = []
+  for (const name of wb.SheetNames) {
+    const sheet = wb.Sheets[name]
+    const csv = XLSX.utils.sheet_to_csv(sheet, { blankrows: false })
+    if (csv.trim()) parts.push(`--- Aba: ${name} ---\n${csv}`)
+  }
+  return parts.join('\n\n')
+}
+
+// m² extraction from free text
+export function extractAreaM2(text: string): number | null {
+  if (!text) return null
+  const patterns = [
+    /área\s+(?:total\s+)?(?:construída\s+)?(?:de\s+)?([\d.,]+)\s*m[²2]/gi,
+    /([\d.,]+)\s*m[²2]\s*(?:de\s+)?(?:área|construção|construída|construida|terreno)/gi,
+    /metragem\s+(?:total\s+)?(?:de\s+)?([\d.,]+)/gi,
+  ]
+  for (const pattern of patterns) {
+    const m = pattern.exec(text)
+    if (m) {
+      const raw = m[1].replace(/\./g, '').replace(',', '.')
+      const n = parseFloat(raw)
+      if (Number.isFinite(n) && n > 5 && n < 2_000_000) return n
+    }
+  }
+  return null
 }

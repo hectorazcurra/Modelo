@@ -230,6 +230,7 @@ function walkDir(dir: string): string[] {
 export async function extractDocRecFolder(
   docRecPath: string,
   maxBytes = 30_000,
+  excludePatterns: RegExp[] = [],
 ): Promise<DocRecExtraction> {
   const result: DocRecExtraction = {
     textoConcatenado: '',
@@ -247,6 +248,8 @@ export async function extractDocRecFolder(
   for (const file of files) {
     const ext = path.extname(file).toLowerCase()
     if (SKIP_EXT.has(ext)) continue
+    const basename = path.basename(file)
+    if (excludePatterns.some((re) => re.test(basename))) continue
 
     let stat: fs.Stats
     try {
