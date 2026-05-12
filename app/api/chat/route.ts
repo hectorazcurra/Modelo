@@ -27,19 +27,30 @@ export async function POST(request: NextRequest) {
     })
 
     // Load historicos that have any actual data (folder was found).
-    // Wrapped in try/catch so the chat still works even if the JSON_EXTRACT
-    // query or JSON parsing fails on any row.
+    // Two-step query: ORDER BY + LIMIT on IDs only (sort buffer stays
+    // tiny), then fetch the heavy `dados` JSON rows by id. A single-
+    // statement ORDER BY blows up MySQL's sort_buffer because each row
+    // has ~35KB of JSON.
     type HistoricoRaw = { titulo: string; dados: unknown }
     let historicos: HistoricoRaw[] = []
     try {
-      historicos = await prisma.$queryRaw<HistoricoRaw[]>`
-        SELECT titulo, dados
+      const ids = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id
         FROM BaseConhecimento
         WHERE tipo = 'projeto_historico'
         AND JSON_EXTRACT(dados, '$.pastaResolvida') IS NOT NULL
         ORDER BY criadoEm DESC
         LIMIT 30
       `
+      if (ids.length) {
+        const rows = await prisma.baseConhecimento.findMany({
+          where: { id: { in: ids.map((r) => r.id) } },
+          select: { id: true, titulo: true, dados: true },
+        })
+        const order = new Map(ids.map((r, i) => [r.id, i]))
+        rows.sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0))
+        historicos = rows.map((r) => ({ titulo: r.titulo, dados: r.dados }))
+      }
     } catch (err) {
       console.error('[chat] failed to load historicos:', err)
     }
