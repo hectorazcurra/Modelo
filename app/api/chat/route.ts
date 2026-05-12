@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
         municipio?: string; uf?: string; prazoContrato?: number; prazoUnidade?: string
         precoVenda?: number; custoMaoDeObraDireta?: number; custoTotal?: number
         margemValor?: number; margemPerc?: number; impostos?: number; hhMOD?: number
-        areaM2?: number
+        bdi?: number; areaM2?: number
       } | null
       categorias?: PPUCategoria[] | null
       itens?: Array<{ descricao?: string; unidade?: string; qtd?: number; precoTotal?: number }> | null
@@ -95,12 +95,14 @@ export async function POST(request: NextRequest) {
 
       // Financial summary — cost for company vs price for client
       const fin: string[] = []
-      if (d.dashboard?.precoVenda)          fin.push(`Preço cliente: ${brl(d.dashboard.precoVenda)}`)
+      const precoCliente = d.dashboard?.precoVenda ?? d.valorOrcado
+      if (precoCliente)                     fin.push(`Preço cliente: ${brl(precoCliente)}`)
       if (d.dashboard?.custoMaoDeObraDireta) fin.push(`Custo MOD empresa: ${brl(d.dashboard.custoMaoDeObraDireta)}`)
       if (d.dashboard?.custoTotal)          fin.push(`Custo total: ${brl(d.dashboard.custoTotal)}`)
       if (d.dashboard?.impostos)            fin.push(`Impostos: ${brl(d.dashboard.impostos)}`)
       if (d.dashboard?.margemPerc != null)  fin.push(`Margem: ${(d.dashboard.margemPerc * 100).toFixed(1)}%`)
       else if (d.margem != null)            fin.push(`Margem: ${(d.margem * 100).toFixed(1)}%`)
+      if (d.dashboard?.bdi)                fin.push(`BDI: ${(d.dashboard.bdi * 100).toFixed(1)}%`)
       if (d.dashboard?.hhMOD)              fin.push(`HH MOD: ${d.dashboard.hhMOD}h`)
       if (typeof d.totalGeralPPU === 'number') fin.push(`Total PPU: ${brl(d.totalGeralPPU)}`)
       if (fin.length) lines.push(fin.join(' | '))
