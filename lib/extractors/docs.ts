@@ -27,8 +27,10 @@ export interface DocRecExtraction {
 
 async function extractPdfText(buf: Buffer): Promise<string> {
   try {
-    const { default: pdfParse } = await import('pdf-parse')
-    const data = await pdfParse(buf)
+    // Import the library file directly to bypass the index.js debug code
+    // that tries to read a test PDF at module init (known pdf-parse bug).
+    const mod = (await import('pdf-parse/lib/pdf-parse.js')) as { default: (b: Buffer) => Promise<{ text: string }> }
+    const data = await mod.default(buf)
     return data.text || ''
   } catch (err) {
     return `[erro ao ler PDF: ${err instanceof Error ? err.message : String(err)}]`

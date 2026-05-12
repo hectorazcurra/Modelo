@@ -107,13 +107,30 @@ function parseNumero(v: Cell): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function findCellValueAfter(rows: Cell[][], label: string): Cell {
+function findCellValueAfter(rows: Cell[][], label: string, headerSiblings: string[] = []): Cell {
   const labelNorm = label.toLowerCase().trim()
-  for (const row of rows) {
+  const siblingsNorm = headerSiblings.map((s) => s.toLowerCase().trim())
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r]
     for (let i = 0; i < row.length; i++) {
       if (String(row[i] ?? '').toLowerCase().trim() === labelNorm) {
+        // Look right for the value
         for (let j = i + 1; j < row.length; j++) {
-          if (!isEmpty(row[j])) return row[j]
+          if (isEmpty(row[j])) continue
+          const next = String(row[j]).toLowerCase().trim()
+          // If next non-empty cell is a known sibling header, this is a header row
+          if (siblingsNorm.includes(next)) {
+            // Look at the cell directly below the label
+            for (let rr = r + 1; rr < Math.min(r + 3, rows.length); rr++) {
+              if (i < rows[rr].length && !isEmpty(rows[rr][i])) return rows[rr][i]
+            }
+            return null
+          }
+          return row[j]
+        }
+        // Nothing to the right — check below
+        for (let rr = r + 1; rr < Math.min(r + 3, rows.length); rr++) {
+          if (i < rows[rr].length && !isEmpty(rows[rr][i])) return rows[rr][i]
         }
       }
     }
@@ -187,8 +204,8 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
     cliente: String(findCellValueAfter(rows, 'Cliente') ?? '').trim() || null,
     projeto: String(findCellValueAfter(rows, 'Projeto') ?? '').trim() || null,
     unidade: String(findCellValueAfter(rows, 'Unidade') ?? '').trim() || null,
-    municipio: String(findCellValueAfter(rows, 'Município') ?? '').trim() || null,
-    uf: String(findCellValueAfter(rows, 'UF') ?? '').trim() || null,
+    municipio: String(findCellValueAfter(rows, 'Município', ['uf', 'estado', 'cidade']) ?? '').trim() || null,
+    uf: String(findCellValueAfter(rows, 'UF', ['município', 'cidade', 'estado']) ?? '').trim() || null,
     prazoContrato,
     prazoUnidade,
     precoVenda: parseMoeda(findCellValueAfter(rows, 'Preço de Venda')),
@@ -206,6 +223,25 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
   }
 }
 
+// Parse item code from cell: handles both numeric (1, 1.1) and string ("1", "1.1", "1.1.2")
+function parseItemNumber(v: Cell): { value: number; isTop: boolean } | null {
+  if (typeof v === 'number') {
+    if (v <= 0) return null
+    return { value: v, isTop: Number.isInteger(v) }
+  }
+  if (typeof v === 'string') {
+    const s = v.trim()
+    if (!/^\d+(\.\d+)*\.?$/.test(s)) return null
+    const parts = s.replace(/\.$/, '').split('.')
+    const top = parseInt(parts[0], 10)
+    if (!Number.isFinite(top) || top <= 0) return null
+    if (parts.length === 1) return { value: top, isTop: true }
+    const sub = parseInt(parts[1], 10)
+    return { value: top + sub / 100, isTop: false }
+  }
+  return null
+}
+
 export function extractPPU(workbook: XLSX.WorkBook): PPUData {
   const sheet = workbook.Sheets['PPU']
   if (!sheet) {
@@ -219,17 +255,23 @@ export function extractPPU(workbook: XLSX.WorkBook): PPUData {
   let totalGeral: number | null = null
 
   for (const row of rows) {
-    const first = row[0]
-    if (typeof first === 'number' && first > 0) {
+    const info = parseItemNumber(row[0])
+    if (info) {
       const descricao = row[1]
       if (isEmpty(descricao)) continue
       const qtd = parseNumero(row[3]) ?? 0
       const precoUnit = parseMoeda(row[4]) ?? 0
       const precoTotal = parseMoeda(row[5]) ?? 0
 
-      // Category header: whole-number item with no price
-      if (Number.isInteger(first) && precoUnit === 0 && precoTotal === 0) {
-        currentCategoria = { item: first, nome: String(descricao).trim(), total: 0, itens: [] }
+      // Category header: top-level item (integer) with no qty and no unit price
+      // (precoTotal may contain a subtotal shown on the category row itself)
+      if (info.isTop && qtd === 0 && precoUnit === 0) {
+        currentCategoria = {
+          item: info.value,
+          nome: String(descricao).trim(),
+          total: precoTotal,  // subtotal if present, else 0
+          itens: [],
+        }
         categorias.push(currentCategoria)
         continue
       }
@@ -237,7 +279,7 @@ export function extractPPU(workbook: XLSX.WorkBook): PPUData {
       if (precoUnit === 0 && precoTotal === 0) continue
 
       const ppu: PPUItem = {
-        item: first,
+        item: info.value,
         descricao: String(descricao).trim(),
         unidade: String(row[2] ?? '').trim(),
         qtd,
@@ -245,10 +287,7 @@ export function extractPPU(workbook: XLSX.WorkBook): PPUData {
         precoTotal,
       }
       itens.push(ppu)
-      if (currentCategoria) {
-        currentCategoria.itens.push(ppu)
-        currentCategoria.total += precoTotal
-      }
+      if (currentCategoria) currentCategoria.itens.push(ppu)
     } else {
       for (let i = 0; i < row.length; i++) {
         if (String(row[i] ?? '').trim() === 'Total') {
@@ -258,6 +297,13 @@ export function extractPPU(workbook: XLSX.WorkBook): PPUData {
           }
         }
       }
+    }
+  }
+
+  // Fill missing category totals from line items
+  for (const cat of categorias) {
+    if (cat.total === 0 && cat.itens.length > 0) {
+      cat.total = cat.itens.reduce((s, it) => s + it.precoTotal, 0)
     }
   }
 
