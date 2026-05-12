@@ -73,6 +73,7 @@ function parseArgs() {
   const argv = process.argv.slice(2)
   let index = '', dir = '/var/lib/metodo/arquivos/'
   let dryRun = false, limit: number | null = null, os: string | null = null
+  let skipEmpty = false, clean = false
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -81,15 +82,19 @@ function parseArgs() {
     else if (a === '--dry-run') dryRun = true
     else if (a === '--limit') limit = parseInt(argv[++i], 10)
     else if (a === '--os') os = argv[++i]
+    else if (a === '--skip-empty') skipEmpty = true
+    else if (a === '--clean') clean = true
   }
 
   if (!index) {
     console.error(
-      'Uso: tsx scripts/import-historico.ts --index <FUP.xlsx> [--dir <base>] [--dry-run] [--limit N] [--os <prefixo>]'
+      'Uso: tsx scripts/import-historico.ts --index <FUP.xlsx> [--dir <base>] [--dry-run] [--limit N] [--os <prefixo>] [--skip-empty] [--clean]\n' +
+      '  --skip-empty  Não gravar projetos sem pasta encontrada\n' +
+      '  --clean       Apagar TODOS os projeto_historico existentes antes de importar'
     )
     process.exit(1)
   }
-  return { index, dir, dryRun, limit, os }
+  return { index, dir, dryRun, limit, os, skipEmpty, clean }
 }
 
 // ─── Number / string utils ────────────────────────────────────────────────────
@@ -494,13 +499,22 @@ async function main() {
   const prisma = new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0])
 
   try {
+    if (args.clean) {
+      const del = await prisma.baseConhecimento.deleteMany({ where: { tipo: 'projeto_historico' } })
+      console.log(`\n--clean: ${del.count} registros projeto_historico apagados.`)
+    }
+
     let inseridos = 0
+    let pulados = 0
     for (const rec of records) {
+      if (args.skipEmpty && !rec.pasta) { pulados++; continue }
       const titulo = buildTitulo(rec.csv)
       const dados = buildDados(rec)
-      await prisma.baseConhecimento.deleteMany({
-        where: { tipo: 'projeto_historico', titulo: { startsWith: `OS ${rec.csv.os}` } },
-      })
+      if (!args.clean) {
+        await prisma.baseConhecimento.deleteMany({
+          where: { tipo: 'projeto_historico', titulo: { startsWith: `OS ${rec.csv.os}` } },
+        })
+      }
       await prisma.baseConhecimento.create({
         data: {
           tipo: 'projeto_historico',
@@ -510,7 +524,7 @@ async function main() {
       })
       inseridos++
     }
-    console.log(`\n${inseridos} registros gravados em BaseConhecimento.`)
+    console.log(`\n${inseridos} registros gravados em BaseConhecimento.${pulados ? ` ${pulados} pulados (sem pasta).` : ''}`)
   } finally {
     await prisma.$disconnect()
   }
