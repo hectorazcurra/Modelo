@@ -374,6 +374,9 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
 
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r]
+    // A second "Descrição da Equipe" row marks the individual-function breakdown block —
+    // which duplicates the team-aggregate totals already in block 1. Stop here.
+    if (row.some((c) => String(c ?? '').trim() === 'Descrição da Equipe')) break
     const itemRaw = cols.item >= 0 ? row[cols.item] : null
     const item = typeof itemRaw === 'number' ? itemRaw : parseNumero(itemRaw)
     const descricao = row[cols.descricao]
