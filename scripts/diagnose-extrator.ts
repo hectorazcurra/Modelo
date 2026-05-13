@@ -142,41 +142,32 @@ if (wb.Sheets['Dashboard']) {
   }
 }
 
-// ── 4. PPU ────────────────────────────────────────────────────────────────────
+// ── 4. PPU — dump raw rows (small sheet) ──────────────────────────────────────
 console.log('\n' + hr())
 const ppu = extractPPU(wb)
 console.log(`📦 PPU — ${ppu.categorias.length} categorias, ${ppu.itens.length} itens`)
 console.log(`   Total geral extraído: ${ppu.totalGeral != null ? brl(ppu.totalGeral) : '❌ não encontrado'}`)
-console.log(`   Mobilização:          ${ppu.mobilizacao != null ? brl(ppu.mobilizacao) : '-'}`)
-console.log(`   Despesas Operac.:     ${ppu.despesasOperacionais != null ? brl(ppu.despesasOperacionais) : '-'}`)
-console.log(`   Mão de Obra:          ${ppu.maoDeObra != null ? brl(ppu.maoDeObra) : '-'}`)
-console.log()
-for (const cat of ppu.categorias) {
-  const recalc = cat.itens.reduce((s, i) => s + i.precoTotal, 0)
-  const match = Math.abs(recalc - cat.total) < 1 ? '✅' : `⚠ soma_itens=${brl(recalc)}`
-  console.log(`  [${cat.item}] ${cat.nome.slice(0, 45).padEnd(45)} ${brl(cat.total).padStart(18)}  ${match}`)
-  for (const item of cat.itens.slice(0, 5)) {
-    console.log(`        ${item.descricao.slice(0, 50)} | ${item.qtd} ${item.unidade} × ${brl(item.precoUnit)} = ${brl(item.precoTotal)}`)
+
+if (wb.Sheets['PPU']) {
+  const ppuSheet = wb.Sheets['PPU']
+  const ppuRange = XLSX.utils.decode_range(ppuSheet['!ref'] ?? 'A1')
+  console.log(`\n  ⚠ PPU raw (range ${ppuSheet['!ref']}):`)
+  console.log(`  sheet_to_json offset: primeira col é índice 0 = coluna ${XLSX.utils.encode_col(ppuRange.s.c)} da planilha`)
+  const ppuRows = sheetAllRows(ppuSheet)
+  for (const row of ppuRows.slice(0, 20)) {
+    const nonNull = row.cells.map((c, i) => c != null && String(c).trim() !== '' ? `[${i}]${JSON.stringify(c)}` : null).filter(Boolean)
+    if (nonNull.length) {
+      console.log(`    Linha ${String(row.rowIdx + 1).padStart(3)}: ${nonNull.join(' | ')}`)
+    }
   }
-  if (cat.itens.length > 5) console.log(`        ... +${cat.itens.length - 5} itens`)
 }
 
-// Show hidden rows in PPU sheet
-if (wb.Sheets['PPU']) {
-  const sheet = wb.Sheets['PPU']
-  const allRows = sheetAllRows(sheet)
-  const hiddenRows = getHiddenRows(sheet)
-  if (hiddenRows.size > 0) {
-    console.log(`\n  ⚠ PPU tem ${hiddenRows.size} linhas ocultas:`)
-    for (const r of [...hiddenRows].slice(0, 20)) {
-      const row = allRows.find(x => x.rowIdx === r)
-      if (row) {
-        const nonNull = row.cells.filter(c => c != null && String(c).trim() !== '')
-        if (nonNull.length) {
-          console.log(`    Linha ${r+1}: ${nonNull.slice(0, 6).map(v => JSON.stringify(v)).join(' | ')}`)
-        }
-      }
-    }
+if (ppu.categorias.length > 0) {
+  console.log()
+  for (const cat of ppu.categorias) {
+    const recalc = cat.itens.reduce((s, i) => s + i.precoTotal, 0)
+    const match = Math.abs(recalc - cat.total) < 1 ? '✅' : `⚠ soma_itens=${brl(recalc)}`
+    console.log(`  [${cat.item}] ${cat.nome.slice(0, 45).padEnd(45)} ${brl(cat.total).padStart(18)}  ${match}`)
   }
 }
 
@@ -202,37 +193,38 @@ for (const e of equipes) {
   )
 }
 
-// Show ALL rows from Tarefas sheet including hidden ones
+// Show outline levels and structure of Tarefas sheet
 if (wb.Sheets['Tarefas']) {
   const sheet = wb.Sheets['Tarefas']
   const allRows = sheetAllRows(sheet)
   const hiddenRows = getHiddenRows(sheet)
+  const rowMeta = (sheet['!rows'] ?? []) as Array<{ hidden?: boolean; outlineLevel?: number; level?: number } | undefined>
 
   console.log(`\n  Total linhas na aba Tarefas (raw): ${allRows.length}`)
   console.log(`  Linhas ocultas: ${hiddenRows.size}`)
 
-  if (hiddenRows.size > 0) {
-    console.log('\n  ⚠ LINHAS OCULTAS NA ABA TAREFAS:')
-    for (const r of [...hiddenRows].slice(0, 30)) {
-      const row = allRows.find(x => x.rowIdx === r)
-      if (row) {
-        const nonNull = row.cells.filter(c => c != null && String(c).trim() !== '')
-        if (nonNull.length) {
-          console.log(`    Linha ${String(r+1).padStart(4)}: ${nonNull.slice(0, 7).map(v => JSON.stringify(v)).join(' | ')}`)
-        }
-      }
-    }
-    if (hiddenRows.size > 30) {
-      console.log(`    ... e mais ${hiddenRows.size - 30} linhas ocultas`)
-    }
+  // Outline levels
+  const withOutline = rowMeta.map((m, i) => ({ i, level: m?.outlineLevel ?? m?.level ?? 0 })).filter(x => x.level > 0)
+  const levelCounts: Record<number, number> = {}
+  for (const x of withOutline) levelCounts[x.level] = (levelCounts[x.level] ?? 0) + 1
+  if (Object.keys(levelCounts).length) {
+    console.log(`  Outline levels: ${JSON.stringify(levelCounts)}`)
+  } else {
+    console.log(`  Outline levels: nenhum (sem agrupamento de linhas)`)
   }
 
-  // Show all rows around the header for context
-  console.log('\n  PRIMEIRAS 5 LINHAS (raw) para localizar header:')
-  for (const row of allRows.slice(0, 5)) {
-    const nonNull = row.cells.filter(c => c != null && String(c).trim() !== '')
+  // Show first 40 data rows with outline level
+  console.log('\n  PRIMEIRAS 40 LINHAS (raw) com outline level:')
+  let shown = 0
+  for (const row of allRows) {
+    if (shown >= 40) break
+    const nonNull = row.cells.filter(c => c != null && String(c).trim() !== '' && String(c) !== '0')
+    if (!nonNull.length) continue
+    const level = rowMeta[row.rowIdx]?.outlineLevel ?? rowMeta[row.rowIdx]?.level ?? 0
+    const lvlTag = level > 0 ? ` [lvl${level}]` : ''
     const flag = row.hidden ? ' [OCULTA]' : ''
-    console.log(`    Linha ${String(row.rowIdx+1).padStart(4)}${flag}: ${nonNull.slice(0, 6).map(v => JSON.stringify(v)).join(' | ')}`)
+    console.log(`    Linha ${String(row.rowIdx + 1).padStart(4)}${flag}${lvlTag}: ${nonNull.slice(0, 6).map(v => JSON.stringify(v)).join(' | ')}`)
+    shown++
   }
 }
 
