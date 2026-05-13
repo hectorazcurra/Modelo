@@ -170,6 +170,50 @@ function findCellValueAfterPartial(rows: Cell[][], ...needles: string[]): Cell {
   return null
 }
 
+// Like findCellValueAfterPartial but skips label occurrences whose first adjacent
+// non-empty cell is text (not parseable as a number). This avoids returning column
+// headers or sibling labels that share the same row as the real value.
+function findNumericValueAfter(rows: Cell[][], ...needles: string[]): Cell {
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i++) {
+      const cell = String(row[i] ?? '').toLowerCase().trim()
+      if (!needles.some((n) => cell.includes(n.toLowerCase()))) continue
+      for (let j = i + 1; j < row.length; j++) {
+        const v = row[j]
+        if (isEmpty(v)) continue
+        if (typeof v === 'number') return v
+        const s = normalizeNumberString(String(v))
+        if (s !== '' && Number.isFinite(parseFloat(s))) return v
+        // First non-empty adjacent cell is non-numeric → this occurrence is a
+        // header/label row, not a data row. Skip it and keep scanning.
+        break
+      }
+    }
+  }
+  return null
+}
+
+// Find the "Margem Líquida" row and return both the monetary value and the
+// percentage from the same row (they appear as separate adjacent cells).
+function findMargemLiquida(rows: Cell[][]): { valor: number | null; perc: number | null } {
+  for (const row of rows) {
+    for (let i = 0; i < row.length; i++) {
+      if (String(row[i] ?? '').toLowerCase().trim() !== 'margem líquida') continue
+      let valor: number | null = null
+      let perc: number | null = null
+      for (let j = i + 1; j < row.length; j++) {
+        const v = parseMoeda(row[j])
+        if (v === null) continue
+        if (v > 1 && valor === null) valor = v
+        if (Math.abs(v) <= 1 && perc === null) perc = v
+        if (valor !== null && perc !== null) break
+      }
+      if (valor !== null || perc !== null) return { valor, perc }
+    }
+  }
+  return { valor: null, perc: null }
+}
+
 export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
   const sheet = workbook.Sheets['Dashboard']
   if (!sheet) {
@@ -195,13 +239,10 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
     if (after.length > 1) prazoUnidade = String(after[1] ?? '').trim() || null
   }
 
-  // Margin: try both percentage and value forms
-  const margemRaw = findCellValueAfterPartial(rows, 'margem líquida', 'margem')
-  const margemVal = parseMoeda(margemRaw)
-  const margemPerc = margemVal !== null && Math.abs(margemVal) <= 1 ? margemVal : null
-  const margemValor = margemVal !== null && Math.abs(margemVal) > 1 ? margemVal : null
+  // "Margem Líquida" row has both the monetary value and percentage as adjacent cells
+  const { valor: margemValor, perc: margemPerc } = findMargemLiquida(rows)
 
-  // Area: look for m² label
+  // Area: look for m² label (not present in supervision/management projects)
   const areaRaw = findCellValueAfterPartial(rows, 'área', 'area total', 'm²', 'metragem')
   const areaVal = parseNumero(areaRaw)
 
@@ -213,16 +254,23 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
     uf: String(findCellValueAfter(rows, 'UF', ['município', 'cidade', 'estado']) ?? '').trim() || null,
     prazoContrato,
     prazoUnidade,
-    precoVenda: parseMoeda(findCellValueAfter(rows, 'Preço de Venda')),
-    precoPorMes: parseMoeda(findCellValueAfter(rows, 'Preço por Mês')),
+    // "Preço de Venda" appears twice: once as a column header (Row 1, no numeric adj.)
+    // and once as a data label (Row 8, numeric adj.). findNumericValueAfter skips the
+    // header occurrence and lands on the data row. "Receita Total" is an equivalent
+    // label that also holds the correct value.
+    precoVenda: parseMoeda(findNumericValueAfter(rows, 'preço de venda', 'receita total')),
+    precoPorMes: parseMoeda(findNumericValueAfter(rows, 'preço por mês')),
     hhMOD: parseNumero(findCellValueAfter(rows, 'Horas Normais MOD')),
     custoMaoDeObraDireta: parseMoeda(findCellValueAfter(rows, 'Mão de Obra Direta')),
     custoTotal: parseMoeda(
-      findCellValueAfterPartial(rows, 'custo total', 'custo direto', 'custo do projeto')
+      findNumericValueAfter(rows, 'custo total', 'custo direto', 'custo do projeto')
     ),
     margemValor,
     margemPerc,
-    impostos: parseMoeda(findCellValueAfterPartial(rows, 'impostos', 'imposto', 'iss', 'pis/cofins')),
+    // "Impostos\n(serviços)" (Row 20) has "PIS" as first adjacent cell (text) so
+    // findNumericValueAfter skips it. "Valor Total - Impostos" (Row 25) has the
+    // aggregate directly adjacent.
+    impostos: parseMoeda(findNumericValueAfter(rows, 'valor total - impostos', 'impostos')),
     bdi: parseNumero(findCellValueAfterPartial(rows, 'bdi')),
     areaM2: areaVal && areaVal > 1 && areaVal < 5_000_000 ? areaVal : null,
   }
