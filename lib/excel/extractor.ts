@@ -422,13 +422,20 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
 
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r]
-    // A second "Descrição da Equipe" row marks the individual-function breakdown block —
-    // which duplicates the team-aggregate totals already in block 1. Stop here.
+    // Second header row: belt-and-suspenders stop (some files have a new header)
     if (row.some((c) => String(c ?? '').trim() === 'Descrição da Equipe')) break
     const itemRaw = cols.item >= 0 ? row[cols.item] : null
     const item = typeof itemRaw === 'number' ? itemRaw : parseNumero(itemRaw)
     const descricao = row[cols.descricao]
-    if (item === null || isEmpty(descricao)) continue
+    if (item === null || isEmpty(descricao)) {
+      // A row with no description but a positive HH value is the block-1 grand-total row.
+      // It marks the boundary between team-aggregate block 1 and the individual-function
+      // breakdown block 2 (which duplicates the same hours). Stop here.
+      const hhRaw = cols.hhTotal >= 0 ? row[cols.hhTotal] : null
+      const hhNum = typeof hhRaw === 'number' ? hhRaw : parseFloat(String(hhRaw ?? '').replace(',', '.'))
+      if (Number.isFinite(hhNum) && hhNum > 0) break
+      continue
+    }
     const totalHH = parseNumero(cols.hhTotal >= 0 ? row[cols.hhTotal] : null) ?? 0
     if (totalHH <= 0) continue
     const custoTotal = parseMoeda(cols.custoTotal >= 0 ? row[cols.custoTotal] : null) ?? 0
