@@ -119,14 +119,19 @@ export function HistoricoDetalheView({ os, dados: d, mode }: HistoricoDetalheVie
               </tr>
             </thead>
             <tbody>
-              {(mode === 'full' ? d.equipes : d.equipes.slice(0, 8)).map((e, i) => (
+              {(mode === 'full' ? d.equipes : d.equipes.slice(0, 8)).map((e, i) => {
+                const hh = e.totalHH ?? 0
+                const custo = e.custoTotal ?? 0
+                const custoPorH = hh > 0 ? custo / hh : 0
+                return (
                 <tr key={i} className="border-b border-[#1A1A1A] last:border-0">
                   <td className="py-1 pr-3 text-[#A3A3A3]">{e.nome ?? '—'}</td>
-                  <td className="py-1 pr-3 text-right text-[#FAFAFA]">{e.totalHH ?? 0}h</td>
-                  <td className="py-1 pr-3 text-right text-[#FAFAFA]">{brl(e.custoTotal ?? 0)}</td>
-                  <td className="py-1 text-right text-[#666666]">{brl(e.custoPorHH ?? 0)}/h</td>
+                  <td className="py-1 pr-3 text-right text-[#FAFAFA]">{Math.round(hh * 100) / 100}h</td>
+                  <td className="py-1 pr-3 text-right text-[#FAFAFA]">{brl(custo)}</td>
+                  <td className="py-1 text-right text-[#666666]">{brl(custoPorH)}/h</td>
                 </tr>
-              ))}
+                )
+              })}
             </tbody>
           </table>
         </Section>
