@@ -380,14 +380,19 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
     if (item === null || isEmpty(descricao)) continue
     const totalHH = parseNumero(cols.hhTotal >= 0 ? row[cols.hhTotal] : null) ?? 0
     if (totalHH <= 0) continue
+    const custoTotal = parseMoeda(cols.custoTotal >= 0 ? row[cols.custoTotal] : null) ?? 0
+    // Derive custoPorHH from custoTotal/totalHH — the Excel column "Custo da Hora por Disciplina"
+    // can hold a discipline rate (tarifa) that doesn't match the actual cost breakdown, leading
+    // to inconsistent data. Computing it ensures totalHH × custoPorHH === custoTotal.
+    const custoPorHH = totalHH > 0 ? custoTotal / totalHH : 0
     equipes.push({
       item,
       nome: String(descricao).trim(),
       sigla: cols.sigla >= 0 && !isEmpty(row[cols.sigla]) ? String(row[cols.sigla]).trim() : null,
       disciplina: cols.disciplina >= 0 && !isEmpty(row[cols.disciplina]) ? String(row[cols.disciplina]).trim() : null,
       totalHH,
-      custoTotal: parseMoeda(cols.custoTotal >= 0 ? row[cols.custoTotal] : null) ?? 0,
-      custoPorHH: parseMoeda(cols.custoHora >= 0 ? row[cols.custoHora] : null) ?? 0,
+      custoTotal,
+      custoPorHH,
     })
   }
 

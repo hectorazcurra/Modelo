@@ -120,7 +120,10 @@ export async function POST(request: NextRequest) {
       if (d.equipes?.length) {
         lines.push('Equipes (horas e custo interno):')
         for (const e of d.equipes.slice(0, 8)) {
-          lines.push(`  - ${e.nome ?? ''}: ${e.totalHH ?? 0}h | ${brl(e.custoTotal ?? 0)} | ${brl(e.custoPorHH ?? 0)}/h`)
+          const hh = e.totalHH ?? 0
+          const custo = e.custoTotal ?? 0
+          const rateHH = hh > 0 ? custo / hh : 0
+          lines.push(`  - ${e.nome ?? ''}: ${Math.round(hh * 100) / 100}h | ${brl(custo)} | ${brl(rateHH)}/h`)
         }
       }
 
