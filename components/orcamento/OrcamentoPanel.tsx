@@ -11,9 +11,11 @@ import {
   Check,
   Pencil,
   X,
+  Info,
 } from 'lucide-react'
 import { useState, useEffect } from 'react'
-import { formatCurrency } from '@/lib/utils'
+import { formatCurrency, extractOs } from '@/lib/utils'
+import { HistoricoModal } from './HistoricoModal'
 import type { OrcamentoDados, OrcamentoItem, MaoDeObra, FaseCronograma, LinhaBaseInfo } from '@/types'
 
 interface OrcamentoPanelProps {
@@ -38,6 +40,7 @@ export function OrcamentoPanel({
   const [localDados, setLocalDados] = useState<OrcamentoDados | null>(dados)
   const [editingLine, setEditingLine] = useState<EditingLine | null>(null)
   const [saving, setSaving] = useState(false)
+  const [modalOs, setModalOs] = useState<string | null>(null)
 
   useEffect(() => {
     if (!editingLine) setLocalDados(dados)
@@ -152,6 +155,12 @@ export function OrcamentoPanel({
     localDados.maoDeObra.filter((m) => !m.status || m.status === 'pending').length
 
   return (
+    <>
+    <HistoricoModal
+      os={modalOs}
+      open={!!modalOs}
+      onOpenChange={(v) => { if (!v) setModalOs(null) }}
+    />
     <div className="h-full overflow-y-auto">
       <div className="p-5 space-y-4">
         {/* Header */}
@@ -269,6 +278,7 @@ export function OrcamentoPanel({
                             onStartEdit={() => setEditingLine({ type: 'item', idx: globalIdx })}
                             onCancelEdit={() => setEditingLine(null)}
                             onConfirmEdit={(upd) => editItem(globalIdx, upd)}
+                            onOpenModal={setModalOs}
                           />
                         )
                       })}
@@ -304,6 +314,7 @@ export function OrcamentoPanel({
                     onStartEdit={() => setEditingLine({ type: 'mdo', idx: i })}
                     onCancelEdit={() => setEditingLine(null)}
                     onConfirmEdit={(upd) => editMdo(i, upd)}
+                    onOpenModal={setModalOs}
                   />
                 )
               })}
@@ -339,6 +350,7 @@ export function OrcamentoPanel({
         )}
       </div>
     </div>
+    </>
   )
 }
 
@@ -352,6 +364,7 @@ interface ItemLineProps {
   onStartEdit: () => void
   onCancelEdit: () => void
   onConfirmEdit: (upd: Pick<OrcamentoItem, 'qtd' | 'custoUnit'>) => void
+  onOpenModal: (os: string) => void
 }
 
 function ItemLine({
@@ -362,6 +375,7 @@ function ItemLine({
   onStartEdit,
   onCancelEdit,
   onConfirmEdit,
+  onOpenModal,
 }: ItemLineProps) {
   const [qtd, setQtd] = useState(item.qtd)
   const [custoUnit, setCustoUnit] = useState(item.custoUnit)
@@ -450,7 +464,22 @@ function ItemLine({
         )}
       </div>
       {item.fonte && !isEditing && (
-        <div className="text-[10px] text-[#555555] mt-0.5 pl-4">Ref: {item.fonte}</div>
+        <div className="mt-0.5 pl-4">
+          {!item.semHistorico ? (
+            <button
+              onClick={() => {
+                const os = item.fonteOs ?? extractOs(item.fonte ?? '')
+                if (os) onOpenModal(os)
+              }}
+              className="inline-flex items-center gap-1 text-[10px] text-[#555555] hover:text-amber-400/80 transition-colors"
+            >
+              <Info className="w-2.5 h-2.5" />
+              {item.fonte}
+            </button>
+          ) : (
+            <span className="text-[10px] text-[#555555]">{item.fonte}</span>
+          )}
+        </div>
       )}
     </div>
   )
@@ -464,6 +493,7 @@ interface MdoLineProps {
   onStartEdit: () => void
   onCancelEdit: () => void
   onConfirmEdit: (upd: Pick<MaoDeObra, 'qtd' | 'dias' | 'valorDia'>) => void
+  onOpenModal: (os: string) => void
 }
 
 function MdoLine({
@@ -474,6 +504,7 @@ function MdoLine({
   onStartEdit,
   onCancelEdit,
   onConfirmEdit,
+  onOpenModal,
 }: MdoLineProps) {
   const [qtd, setQtd] = useState(item.qtd)
   const [dias, setDias] = useState(item.dias)
@@ -571,7 +602,22 @@ function MdoLine({
         )}
       </div>
       {item.fonte && !isEditing && (
-        <div className="text-[10px] text-[#555555] mt-0.5 pl-4">Ref: {item.fonte}</div>
+        <div className="mt-0.5 pl-4">
+          {!item.semHistorico ? (
+            <button
+              onClick={() => {
+                const os = item.fonteOs ?? extractOs(item.fonte ?? '')
+                if (os) onOpenModal(os)
+              }}
+              className="inline-flex items-center gap-1 text-[10px] text-[#555555] hover:text-amber-400/80 transition-colors"
+            >
+              <Info className="w-2.5 h-2.5" />
+              {item.fonte}
+            </button>
+          ) : (
+            <span className="text-[10px] text-[#555555]">{item.fonte}</span>
+          )}
+        </div>
       )}
     </div>
   )

@@ -55,6 +55,7 @@ Gere o bloco orcamento-update com os dados calculados.
       "custoUnit": 0,
       "total": 0,
       "fonte": "OS XXXX - CLIENTE",
+      "fonteOs": "XXXX",
       "semHistorico": false
     }
   ],
@@ -68,6 +69,7 @@ Gere o bloco orcamento-update com os dados calculados.
       "valorDia": 0,
       "total": 0,
       "fonte": "OS XXXX - CLIENTE",
+      "fonteOs": "XXXX",
       "semHistorico": false
     }
   ],
@@ -81,7 +83,9 @@ Gere o bloco orcamento-update com os dados calculados.
 }
 \`\`\`
 
-**Regras do campo "fonte"**: Preencha com o OS real da base. Ex: "OS 2026-013 - SCALA DATA CENTERS". Se não houver fonte, coloque "Sem histórico" e defina "semHistorico": true.
+**Regras dos campos "fonte" e "fonteOs"**:
+- "fonte": texto completo, ex: "OS 2026-013 - SCALA DATA CENTERS". Se não houver, coloque "Sem histórico" e defina "semHistorico": true.
+- "fonteOs": somente o código numérico da OS, sem prefixo "OS" e sem nome do cliente. Ex: "2026-013". Obrigatório sempre que semHistorico for false. Deixe ausente quando semHistorico for true.
 
 ${pdfTexto
   ? `## Carta Convite / Edital (texto extraído do arquivo):

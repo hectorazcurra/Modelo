@@ -21,6 +21,7 @@ export interface OrcamentoItem {
   custoUnit: number
   total: number
   fonte?: string
+  fonteOs?: string
   semHistorico?: boolean
   status?: LinhaStatus
 }
@@ -32,6 +33,7 @@ export interface MaoDeObra {
   valorDia: number
   total: number
   fonte?: string
+  fonteOs?: string
   semHistorico?: boolean
   status?: LinhaStatus
 }
@@ -93,6 +95,50 @@ export interface OrcamentoType {
   aprovado: boolean
   criadoEm: Date
   atualizadoEm: Date
+}
+
+export type PPUCategoria = { nome?: string; total?: number; itens?: unknown[] }
+export type TextSection = { textoExtraido?: string } | null
+
+export interface HistoricoDados {
+  os?: string
+  cliente?: string
+  descricao?: string
+  produto?: string
+  tipologia?: string
+  valorOrcado?: number | null
+  margem?: number | null
+  resultado?: number | null
+  statusComercial?: string
+  totalGeralPPU?: number | null
+  mobilizacao?: number | null
+  despesasOperacionais?: number | null
+  maoDeObraCategoria?: number | null
+  areaM2?: number | null
+  revisao?: string | null
+  dashboard?: {
+    municipio?: string
+    uf?: string
+    prazoContrato?: number
+    prazoUnidade?: string
+    precoVenda?: number
+    custoMaoDeObraDireta?: number
+    custoTotal?: number
+    margemValor?: number
+    margemPerc?: number
+    impostos?: number
+    hhMOD?: number
+    bdi?: number
+    areaM2?: number
+  } | null
+  categorias?: PPUCategoria[] | null
+  itens?: Array<{ descricao?: string; unidade?: string; qtd?: number; precoTotal?: number }> | null
+  equipes?: Array<{ nome?: string; totalHH?: number; custoTotal?: number; custoPorHH?: number }> | null
+  cartaConvite?: TextSection
+  suprimentos?: TextSection
+  engenharia?: TextSection
+  propostas?: TextSection
+  outrosOrcamento?: TextSection
 }
 
 export interface ProjetoListItem {

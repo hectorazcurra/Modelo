@@ -40,3 +40,16 @@ export function statusColor(status: StatusProjeto): string {
   }
   return colors[status]
 }
+
+export function brl(n: number): string {
+  return n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
+}
+
+export function excerpt(text: string | undefined, max: number): string | null {
+  return text ? text.replace(/\s+/g, ' ').slice(0, max).trim() : null
+}
+
+export function extractOs(fonte: string): string | null {
+  const m = fonte.match(/OS\s+([\d.\-/]+)/i)
+  return m ? m[1] : null
+}

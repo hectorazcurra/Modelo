@@ -4,7 +4,8 @@ import { prisma } from '@/lib/db/client'
 import { getModel } from '@/lib/ai/providers'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
 import { extractOrcamentoFromText, stripOrcamentoBlock } from '@/lib/ai/analyzer'
-import type { AIProvider, OrcamentoDados } from '@/types'
+import { brl, excerpt } from '@/lib/utils'
+import type { AIProvider, OrcamentoDados, HistoricoDados } from '@/types'
 
 function safeParse(s: string): unknown {
   try { return JSON.parse(s) } catch { return null }
@@ -24,12 +25,6 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: 'Projeto não encontrado' }, { status: 404 })
     }
 
-    const baseReferencia = await prisma.baseConhecimento.findMany({
-      where: { tipo: { in: ['custo_m2', 'mao_de_obra', 'projeto_aprovado'] } },
-      orderBy: { criadoEm: 'desc' },
-      take: 5,
-    })
-
     // Load historicos. Two passes to avoid MySQL sort_buffer overflow
     // (each `dados` row is ~35KB of JSON):
     //   1. SELECT id ORDER BY criadoEm — sort buffer only holds (id, criadoEm)
@@ -45,7 +40,7 @@ export async function POST(request: NextRequest) {
         FROM BaseConhecimento
         WHERE tipo = 'projeto_historico'
         ORDER BY criadoEm DESC
-        LIMIT 100
+        LIMIT 500
       `
       totalRows = ids.length
       if (ids.length) {
@@ -77,44 +72,6 @@ export async function POST(request: NextRequest) {
       return { titulo: h.titulo, dados }
     })
 
-    type TextSection = { textoExtraido?: string } | null
-    type PPUCategoria = { nome?: string; total?: number; itens?: unknown[] }
-
-    type HistoricoDados = {
-      os?: string
-      cliente?: string
-      descricao?: string
-      produto?: string
-      tipologia?: string
-      valorOrcado?: number | null
-      margem?: number | null
-      resultado?: number | null
-      statusComercial?: string
-      totalGeralPPU?: number | null
-      mobilizacao?: number | null
-      despesasOperacionais?: number | null
-      maoDeObraCategoria?: number | null
-      areaM2?: number | null
-      revisao?: string | null
-      dashboard?: {
-        municipio?: string; uf?: string; prazoContrato?: number; prazoUnidade?: string
-        precoVenda?: number; custoMaoDeObraDireta?: number; custoTotal?: number
-        margemValor?: number; margemPerc?: number; impostos?: number; hhMOD?: number
-        bdi?: number; areaM2?: number
-      } | null
-      categorias?: PPUCategoria[] | null
-      itens?: Array<{ descricao?: string; unidade?: string; qtd?: number; precoTotal?: number }> | null
-      equipes?: Array<{ nome?: string; totalHH?: number; custoTotal?: number; custoPorHH?: number }> | null
-      cartaConvite?: TextSection
-      suprimentos?: TextSection
-      engenharia?: TextSection
-      propostas?: TextSection
-      outrosOrcamento?: TextSection
-    }
-
-    const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })
-    const excerpt = (text: string | undefined, max: number) =>
-      text ? text.replace(/\s+/g, ' ').slice(0, max).trim() : null
 
     function formatHistorico(b: { titulo: string; dados: unknown }): string {
       const d = (b.dados ?? {}) as HistoricoDados
@@ -187,7 +144,6 @@ export async function POST(request: NextRequest) {
     }
 
     const baseTexto = [
-      ...baseReferencia.map((b) => `### ${b.titulo}\n${JSON.stringify(b.dados, null, 2)}`),
       ...(historicosFormatted.length > 0
         ? [
             `### Projetos históricos da empresa (${historicosFormatted.length} projetos com dados)`,
