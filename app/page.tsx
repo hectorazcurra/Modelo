@@ -2,6 +2,7 @@ import { Header } from '@/components/layout/Header'
 import { Hero } from '@/components/landing/Hero'
 import { Features } from '@/components/landing/Features'
 import { CTA } from '@/components/landing/CTA'
+import { withBase } from '@/lib/basePath'
 
 export default function LandingPage() {
   return (
@@ -20,7 +21,7 @@ export default function LandingPage() {
           <div className="flex items-center gap-2">
             <span className="text-xs text-[#666666]">Desenvolvido por</span>
             <img
-              src="/nato-digital-logo.png"
+              src={withBase("/nato-digital-logo.png")}
               alt="Nato Digital"
               className="h-6 w-auto opacity-80 hover:opacity-100 transition-opacity"
             />

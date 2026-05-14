@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import { FileText, Upload, X, Loader2, AlertCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { withBase } from '@/lib/basePath'
 
 const ACCEPTED_EXTS = [
   '.pdf', '.docx', '.doc', '.msg', '.eml',
@@ -72,7 +73,7 @@ export function NewProjectForm() {
     setError('')
 
     try {
-      const res = await fetch('/api/projetos', {
+      const res = await fetch(withBase('/api/projetos'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ nome, descricao, aiProvider }),
@@ -86,7 +87,7 @@ export function NewProjectForm() {
         formData.append('projetoId', projeto.id)
         for (const f of files) formData.append('file', f)
 
-        const uploadRes = await fetch('/api/upload', {
+        const uploadRes = await fetch(withBase('/api/upload'), {
           method: 'POST',
           body: formData,
         })

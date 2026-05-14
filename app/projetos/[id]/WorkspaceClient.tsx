@@ -9,6 +9,7 @@ import { ChatPanel } from '@/components/chat/ChatPanel'
 import { OrcamentoPanel } from '@/components/orcamento/OrcamentoPanel'
 import { Badge } from '@/components/ui/badge'
 import { statusLabel, statusColor } from '@/lib/utils'
+import { withBase } from '@/lib/basePath'
 import type { StatusProjeto, OrcamentoDados, LinhaBaseInfo } from '@/types'
 
 interface WorkspaceClientProps {
@@ -41,7 +42,7 @@ export function WorkspaceClient({
 
   const { messages, sendMessage, status, error } = useChat({
     transport: new TextStreamChatTransport({
-      api: '/api/chat',
+      api: withBase('/api/chat'),
       body: { projetoId: projeto.id },
     }),
     messages: initialMessages,
@@ -50,7 +51,7 @@ export function WorkspaceClient({
     },
     onFinish: async () => {
       // Refresh orcamento after each AI response
-      const res = await fetch(`/api/orcamento/${projeto.id}`)
+      const res = await fetch(withBase(`/api/orcamento/${projeto.id}`))
       if (res.ok) {
         const data = await res.json()
         setOrcamento({ dados: data.dados, versao: data.versao, aprovado: data.aprovado })
@@ -64,7 +65,7 @@ export function WorkspaceClient({
   const handleSendMessage = useCallback(
     async (content: string) => {
       // Save user message to DB
-      fetch(`/api/projetos/${projeto.id}/mensagem`, {
+      fetch(withBase(`/api/projetos/${projeto.id}/mensagem`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ conteudo: content }),
@@ -89,7 +90,7 @@ export function WorkspaceClient({
         formData.append('projetoId', projeto.id)
         for (const f of files) formData.append('file', f)
 
-        const res = await fetch('/api/upload', { method: 'POST', body: formData })
+        const res = await fetch(withBase('/api/upload'), { method: 'POST', body: formData })
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
           throw new Error(body.error ?? 'Erro ao fazer upload')
@@ -109,7 +110,7 @@ export function WorkspaceClient({
   )
 
   const handleAprovar = useCallback(async () => {
-    const res = await fetch(`/api/orcamento/${projeto.id}`, {
+    const res = await fetch(withBase(`/api/orcamento/${projeto.id}`), {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ aprovado: true }),
@@ -122,7 +123,7 @@ export function WorkspaceClient({
 
   const handleSalvarEdicao = useCallback(
     async (dados: OrcamentoDados) => {
-      const res = await fetch(`/api/orcamento/${projeto.id}`, {
+      const res = await fetch(withBase(`/api/orcamento/${projeto.id}`), {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dados }),
@@ -137,7 +138,7 @@ export function WorkspaceClient({
 
   const handleConfirmarLinha = useCallback(
     async (linha: LinhaBaseInfo) => {
-      await fetch(`/api/orcamento/${projeto.id}/confirmar-linha`, {
+      await fetch(withBase(`/api/orcamento/${projeto.id}/confirmar-linha`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ linha }),

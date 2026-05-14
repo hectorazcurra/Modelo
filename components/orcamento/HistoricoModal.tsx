@@ -10,6 +10,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 import { HistoricoDetalheView } from './HistoricoDetalheView'
+import { withBase } from '@/lib/basePath'
 import type { HistoricoDados } from '@/types'
 
 interface HistoricoModalProps {
@@ -40,7 +41,7 @@ export function HistoricoModal({ os, open, onOpenChange }: HistoricoModalProps) 
     cache.current.set(os, loading)
     setEntry(loading)
 
-    fetch(`/api/historicos/${encodeURIComponent(os)}`)
+    fetch(withBase(`/api/historicos/${encodeURIComponent(os)}`))
       .then(async (res) => {
         if (!res.ok) {
           const body = await res.json().catch(() => ({}))
