@@ -13,6 +13,14 @@ export interface LinhaBaseInfo {
   tipo: 'item' | 'mdo'
 }
 
+export interface Referencia {
+  os: string                  // OS code, e.g. "2026-013"
+  equipe?: string             // equipe name in the historical project, e.g. "Equipe01"
+  valorHora?: number          // R$/h from this reference
+  totalHH?: number            // total HH from this equipe in the historical project
+  cliente?: string            // client name for context
+}
+
 export interface OrcamentoItem {
   categoria: string
   descricao: string
@@ -20,8 +28,9 @@ export interface OrcamentoItem {
   qtd: number
   custoUnit: number
   total: number
-  fonte?: string
-  fonteOs?: string
+  fonte?: string              // primary source (text), backward compatible
+  fonteOs?: string            // primary OS code, backward compatible
+  referencias?: Referencia[]  // additional sources averaged into the chosen rate
   semHistorico?: boolean
   status?: LinhaStatus
 }
@@ -32,8 +41,9 @@ export interface MaoDeObra {
   dias: number
   valorDia: number
   total: number
-  fonte?: string
-  fonteOs?: string
+  fonte?: string              // primary source (text), backward compatible
+  fonteOs?: string            // primary OS code, backward compatible
+  referencias?: Referencia[]  // additional sources averaged into the chosen rate
   semHistorico?: boolean
   status?: LinhaStatus
 }

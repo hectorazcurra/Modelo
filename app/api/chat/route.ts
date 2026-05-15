@@ -3,7 +3,7 @@ import { streamText, convertToModelMessages } from 'ai'
 import { prisma } from '@/lib/db/client'
 import { getModel } from '@/lib/ai/providers'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
-import { extractOrcamentoFromText, stripOrcamentoBlock } from '@/lib/ai/analyzer'
+import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, type HistoricoEnvelope } from '@/lib/ai/analyzer'
 import { brl, excerpt } from '@/lib/utils'
 import type { AIProvider, OrcamentoDados, HistoricoDados } from '@/types'
 
@@ -174,6 +174,9 @@ export async function POST(request: NextRequest) {
 
     const result = streamText({
       model,
+      // Low temperature: the orçamento math must be consistent run-to-run.
+      // High temperature was producing 4x swings on the same input.
+      temperature: 0.2,
       system: systemPrompt,
       messages: modelMessages,
       onError: (e: unknown) => {
@@ -190,8 +193,23 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        const orcamentoData = extractOrcamentoFromText(text)
-        if (orcamentoData) {
+        const orcamentoRaw = extractOrcamentoFromText(text)
+        if (orcamentoRaw) {
+          // Deterministic envelope enforcement — the model cannot self-enforce
+          // the cost cap reliably, so clamp against the real economics of the
+          // historical projects it cited.
+          const envelopeData: HistoricoEnvelope[] = historicosFormatted.map((h) => {
+            const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null } }
+            return {
+              os: d.os ?? '',
+              produto: d.produto ?? d.tipologia ?? null,
+              precoVenda: d.dashboard?.precoVenda ?? null,
+              prazoMeses: d.dashboard?.prazoContrato ?? null,
+            }
+          })
+          const { orc: orcamentoData, applied } = clampToEnvelope(orcamentoRaw, envelopeData)
+          if (applied) console.log(`[chat] envelope clamp applied to projeto=${projetoId}`)
+
           const existingOrc = await prisma.orcamento.findUnique({ where: { projetoId } })
           const dados = orcamentoData as unknown as Parameters<typeof prisma.orcamento.create>[0]['data']['dados']
           if (existingOrc) {
