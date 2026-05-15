@@ -253,9 +253,28 @@ async function main() {
     console.log(`  ${e.nome.slice(0, 32).padEnd(33)} HH=${String(Math.round(e.totalHH)).padStart(5)} R$/h=${e.custoPorHH.toFixed(0).padStart(5)} = ${brl(e.custoTotal)}`)
   }
 
+  // Prazo-normalized comparison — fair across fixed-scope vs unit/monthly
+  // priced contracts (LPU, per-month) where total-vs-total is apples-to-oranges.
+  const realPrazo = dash.prazoContrato ?? 0
+  const aiPrazoM = (() => {
+    const m = String(orc.resumo.prazo ?? '').match(/(\d+[.,]?\d*)/)
+    return m ? parseFloat(m[1].replace(',', '.')) : 0
+  })()
+  console.log('\n' + '─'.repeat(78))
+  console.log('NORMALIZADO POR MÊS (comparação justa p/ contratos unitários/mensais):')
+  console.log('─'.repeat(78))
+  if (realPrazo > 0 && aiPrazoM > 0 && dash.precoVenda) {
+    const realMes = dash.precoVenda / realPrazo
+    const aiMes = orc.totalGeral / aiPrazoM
+    console.log(`  Preço/mês real: ${fmt(realMes)}  |  IA: ${fmt(aiMes)}  |  Δ ${pct(aiMes, realMes)}`)
+    console.log(`  (real ${realPrazo}m × ${fmt(realMes)} ; IA ${aiPrazoM}m × ${fmt(aiMes)})`)
+  } else {
+    console.log('  (prazo indisponível para normalizar)')
+  }
+
   console.log('\n' + '═'.repeat(78))
   const ratio = dash.precoVenda ? orc.totalGeral / dash.precoVenda : 0
-  console.log(`VEREDITO: IA está ${ratio > 1 ? `${((ratio - 1) * 100).toFixed(0)}% ACIMA` : `${((1 - ratio) * 100).toFixed(0)}% ABAIXO`} do preço real (${fmt(orc.totalGeral)} vs ${fmt(dash.precoVenda)})`)
+  console.log(`VEREDITO (total): IA ${ratio > 1 ? `${((ratio - 1) * 100).toFixed(0)}% ACIMA` : `${((1 - ratio) * 100).toFixed(0)}% ABAIXO`} do preço real (${fmt(orc.totalGeral)} vs ${fmt(dash.precoVenda)})`)
   console.log('═'.repeat(78))
 }
 
