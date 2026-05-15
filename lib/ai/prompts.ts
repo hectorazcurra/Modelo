@@ -158,7 +158,7 @@ Agora distribua o ENVELOPE_CUSTO entre as funções, usando o projeto comparáve
 ${pdfTexto
   ? `## Carta Convite / Edital (texto extraído do arquivo):
 \`\`\`
-${pdfTexto.slice(0, 15000)}${pdfTexto.length > 15000 ? '\n[... texto truncado ...]' : ''}
+${pdfTexto.slice(0, 80000)}${pdfTexto.length > 80000 ? '\n[... texto truncado ...]' : ''}
 \`\`\``
   : '## Nenhuma carta convite carregada ainda. Aguarde o upload do arquivo ou peça ao usuário para descrever o escopo.'}
 
@@ -193,5 +193,5 @@ Projete horas/equipe por função com base nos projetos identificados. Cite o OS
 Gere o bloco orcamento-update com todos os campos, incluindo "fonte" e "semHistorico" em cada item.
 
 Texto do arquivo:
-${textoEdital.slice(0, 20000)}`
+${textoEdital.slice(0, 80000)}`
 }

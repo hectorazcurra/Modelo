@@ -124,8 +124,22 @@ async function main() {
     const files: string[] = fs.statSync(DOCS).isDirectory()
       ? fs.readdirSync(DOCS).map((f) => path.join(DOCS, f))
       : [DOCS]
+    // Scope-defining docs first so they survive the prompt's char budget.
+    // Quantitative annexes (DPF/PPU/BMS/planilha) are critical for umbrella/LPU
+    // contracts — they carry the post/quantity counts — so they rank high.
+    const rank = (name: string): number => {
+      const n = name.toLowerCase()
+      if (/rfq|rfp|edital|carta.?convite|termo.?de.?refer|memorial|escopo/.test(n)) return 0
+      if (/dpf|ppu|bms|planilha|quantitativ|or[çc]ament|lpu|pre[çc]o/.test(n)) return 1
+      if (/anexo\s*i\b|especifica|t[eé]cnic|fisc|einfra/.test(n)) return 2
+      if (/minuta|contrat|faq/.test(n)) return 3
+      return 4 // SMS, tributária, boilerplate
+    }
+    files.sort((a, b) => rank(path.basename(a)) - rank(path.basename(b)) || a.localeCompare(b))
     for (const f of files) {
-      if (path.basename(f).startsWith('~$') || /\.xlsx?$/i.test(f)) continue
+      // Skip Office temp lock files only. .xlsx/.xls annexes ARE extracted
+      // (sheet_to_csv) — they hold quantities/posts that define contract scale.
+      if (path.basename(f).startsWith('~$')) continue
       try {
         const txt = await extractTextFromFile(path.basename(f), fs.readFileSync(f))
         if (txt) pdfTexto += `\n\n=== ${path.basename(f)} ===\n${txt}`
