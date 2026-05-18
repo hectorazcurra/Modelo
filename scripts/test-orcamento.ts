@@ -199,7 +199,7 @@ async function main() {
       const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; valorOrcado?: number | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null } }
       return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null }
     })
-    const bucketAlvo = serviceBucket(pdfTexto)
+    const bucketAlvo = serviceBucket(pdfTexto.slice(0, 600))
     const moldeOs = pickMolde(envelopeData, bucketAlvo)
     const moldeEntry = moldeOs
       ? historicos.find((h) => (h.dados as HistoricoDados)?.os === moldeOs)

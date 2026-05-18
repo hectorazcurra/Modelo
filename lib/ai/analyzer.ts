@@ -32,10 +32,14 @@ export interface HistoricoEnvelope {
 
 // Classify a free-text objeto/produto into a coarse service bucket so the
 // envelope is computed from same-type history, not the AI's cited refs.
+// Classify a SHORT string (objeto/produto/título) into a service bucket.
+// First-match order with the more specific service first. Feed this a short
+// signal (objeto line / produto), NOT a whole multi-page edital — counting
+// over long text is noisy ("projeto"/"obra" appear constantly).
 export function serviceBucket(s: string | null | undefined): string {
   const t = (s ?? '').toLowerCase()
-  if (/gerenc/.test(t)) return 'gerenciamento'
   if (/fiscaliz/.test(t)) return 'fiscalizacao'
+  if (/gerenc/.test(t)) return 'gerenciamento'
   if (/consultor/.test(t)) return 'consultoria'
   if (/levantament|cadastr|laudo|vistoria/.test(t)) return 'levantamento'
   if (/projeto|engenharia|desenvolvimento/.test(t)) return 'projeto'
@@ -115,8 +119,13 @@ export function clampToEnvelope(
   if (medMes == null) return { orc, applied: false, note: '' }
 
   const envelopePreco = medMes * prazoNovo
-  const limite = envelopePreco * (1 + tolerancePct)
-  if (orc.totalGeral <= limite) {
+  const ratio = orc.totalGeral / envelopePreco
+  // Bidirectional: the LLM swings both ways (same input → -60% or +20% even
+  // at low temperature). The deterministic type-envelope is the anchor in
+  // BOTH directions — scale down when over, UP when far under. Only fires
+  // outside the tolerance band, and only when there are ≥3 same-type
+  // comparables (guard above), so genuine outliers aren't force-normalized.
+  if (ratio >= 1 - tolerancePct && ratio <= 1 + tolerancePct) {
     return { orc, applied: false, note: '' }
   }
 
@@ -140,9 +149,10 @@ export function clampToEnvelope(
     totalGeral: scale(orc.totalGeral),
   }
 
+  const dir = factor < 1 ? 'excedia' : 'estava abaixo d'
   const note =
     `\n\n[AJUSTE AUTOMÁTICO DE ENVELOPE] O total proposto (R$ ${Math.round(orc.totalGeral).toLocaleString('pt-BR')}) ` +
-    `excedia o envelope histórico (R$ ${Math.round(envelopePreco).toLocaleString('pt-BR')} = ` +
+    `${dir}o envelope histórico (R$ ${Math.round(envelopePreco).toLocaleString('pt-BR')} = ` +
     `mediana R$ ${Math.round(medMes).toLocaleString('pt-BR')}/mês de ${mesmoTipo.length} projetos "${alvo}" × ${prazoNovo} meses). ` +
     `Todas as linhas foram escaladas por ${(factor * 100).toFixed(0)}% para respeitar a economia real de projetos do mesmo tipo.`
 

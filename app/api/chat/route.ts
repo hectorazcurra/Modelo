@@ -160,7 +160,9 @@ export async function POST(request: NextRequest) {
         prazoMeses: d.dashboard?.prazoContrato ?? null,
       }
     })
-    const bucketAlvo = serviceBucket(`${projeto.nome ?? ''} ${projeto.pdfTexto ?? ''}`)
+    // Classify from a SHORT signal (project name + edital head, where the
+    // object/title lives) — not the whole multi-page text, which is noisy.
+    const bucketAlvo = serviceBucket(`${projeto.nome ?? ''} ${(projeto.pdfTexto ?? '').slice(0, 600)}`)
     const moldeOs = pickMolde(envelopeData, bucketAlvo)
 
     function formatMolde(b: { titulo: string; dados: unknown }): string {

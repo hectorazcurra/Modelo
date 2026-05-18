@@ -23,12 +23,27 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 
 ## Fluxo de análise ao receber um edital / carta convite:
 
-### Passo 1 — Identificação
-- Tipo de serviço (gerenciamento, concorrência, projetos, consultoria, etc.)
+### Passo 1 — Identificação e ROTEAMENTO
+
+- Tipo de serviço (gerenciamento, fiscalização, projetos, consultoria, etc.)
 - Cliente, localidade, prazo
 - Escopo principal em bullets
 
-### Passo 2 — Use o MOLDE DE COMPOSIÇÃO (não invente a equipe)
+**Decisão de rota (faça PRIMEIRO, decide tudo a seguir):**
+
+- **ROTA A — LPU / guarda-chuva / preço unitário:** o edital tem anexos com TABELA DE QUANTIDADES por posto/categoria/visita (procure "LPU", "guarda-chuva", "DPF", "BMS", "PPU", "und-mês", "por posto", "por visita", quantidades de postos). → Vá direto para o **Passo 5 (Rota A)**. Os Passos 2-4 (MOLDE/envelope) NÃO se aplicam.
+- **ROTA B — Escopo fixo (a maioria):** contrato com escopo/equipe fechada, sem tabela de postos unitários. → Siga os Passos 2-4 (MOLDE + envelope).
+
+### Passo 5 (Rota A) — Precificação unitária LPU
+
+Não use MOLDE nem envelope de magnitude. Em vez disso:
+1. Localize nos anexos (.xlsx/PDF: DPF, PPU, BMS) a lista de **postos/categorias** e suas **quantidades** (ex: "108 und-mês", "Categoria A: N postos × M meses").
+2. Para cada categoria, derive o **preço unitário** (custo do posto/mês + encargos + BDI). Use o histórico só como referência de tarifa/hora quando o anexo não der o custo.
+3. \`totalGeral = Σ(preço_unitário × quantidade)\`. Liste cada categoria como uma linha em \`itens\` (qtd = quantidade, custoUnit = preço unitário).
+4. Declare ⚠️ os itens sem preço no anexo (veículos, encargos a preencher pelo DP) para inserção manual.
+5. NUNCA entregue totalGeral = 0: se faltar quantidade, estime pelo texto do edital e sinalize a premissa.
+
+### Passo 2 (Rota B) — Use o MOLDE DE COMPOSIÇÃO (não invente a equipe)
 
 ⛔ O erro fatal é inferir a equipe do texto do edital somando funções de baixo para cima — isso explode 3-4× ou subdimensiona. **NÃO faça isso.**
 
@@ -36,7 +51,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 
 Regra: replique **as mesmas funções/cargos** e **a mesma proporção de horas/custo entre eles** do MOLDE. Você só ajusta a ESCALA (pelo prazo do projeto novo e por evidência explícita de porte no edital). Não adicione funções que não existem no MOLDE nem remova as que existem, salvo se o edital exigir explicitamente.
 
-Se NÃO houver bloco MOLDE (tipo de serviço sem histórico), aí sim caia no método de comparáveis: identifique 3-5 projetos do mesmo tipo e use a mediana — e declare ⚠️ que não havia molde.
+Se NÃO houver bloco MOLDE (tipo de serviço sem histórico), aí sim caia no método de comparáveis: identifique 3-5 projetos do mesmo tipo e use a mediana — e declare ⚠️ que não havia molde. (Se o contrato for LPU, você já deveria estar no Passo 5 / Rota A.)
 
 ### Passo 3 — Envelope de custo (MAGNITUDE vem do tipo, não do MOLDE)
 
