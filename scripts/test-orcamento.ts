@@ -18,7 +18,7 @@ import * as path from 'node:path'
 import { generateText } from 'ai'
 import { extractTextFromFile } from '../lib/extractors/docs'
 import { buildSystemPrompt } from '../lib/ai/prompts'
-import { extractOrcamentoFromText, clampToEnvelope, type HistoricoEnvelope } from '../lib/ai/analyzer'
+import { extractOrcamentoFromText, clampToEnvelope, serviceBucket, pickMolde, type HistoricoEnvelope } from '../lib/ai/analyzer'
 import { getModel } from '../lib/ai/providers'
 import { readPricingWorkbook, extractDashboard, extractTarefas } from '../lib/excel/extractor'
 import { brl, excerpt } from '../lib/utils'
@@ -105,6 +105,30 @@ function formatHistorico(b: { titulo: string; dados: unknown }): string {
   return lines.join('\n')
 }
 
+// Mirrors formatMolde in app/api/chat/route.ts — keep in sync.
+function formatMolde(b: { titulo: string; dados: unknown }, bucketAlvo: string): string {
+  const d = (b.dados ?? {}) as HistoricoDados
+  const preco = d.dashboard?.precoVenda ?? d.valorOrcado ?? 0
+  const prazo = d.dashboard?.prazoContrato ?? null
+  const out: string[] = [
+    `## MOLDE DE COMPOSIÇÃO (referência determinística — replique a ESTRUTURA, escale pelo prazo)`,
+    `${b.titulo} — tipo "${bucketAlvo}"${prazo ? ` | prazo ${prazo} meses` : ''}${preco ? ` | preço ${brl(preco)}` : ''}`,
+    `Este é o projeto histórico do MESMO TIPO mais representativo (preço mediano do bucket). Use a composição abaixo como TEMPLATE: replique as MESMAS funções/cargos e a MESMA proporção de horas entre eles, ajustando só a escala pelo prazo do projeto novo e por evidência explícita de porte no edital.`,
+  ]
+  const totCusto = (d.equipes ?? []).reduce((s, e) => s + (e.custoTotal ?? 0), 0)
+  for (const e of d.equipes ?? []) {
+    const hh = e.totalHH ?? 0
+    const custo = e.custoTotal ?? 0
+    const pctCusto = totCusto > 0 ? ((custo / totCusto) * 100).toFixed(1) : '0'
+    out.push(`- Equipe ${e.nome ?? ''}: ${Math.round(hh)}h | ${brl(custo)} | ${pctCusto}% do custo`)
+    const profs = (e as { profissionais?: Array<{ funcao?: string; hh?: number; custo?: number }> }).profissionais
+    for (const p of profs ?? []) {
+      out.push(`    · ${p.funcao ?? ''}: ${Math.round(p.hh ?? 0)}h${p.custo ? ` | ${brl(p.custo)}` : ''}`)
+    }
+  }
+  return out.join('\n')
+}
+
 async function main() {
   const adapter = new PrismaMariaDb(process.env.DATABASE_URL as string)
   const prisma = new PrismaClient({ adapter } as ConstructorParameters<typeof PrismaClient>[0])
@@ -171,15 +195,21 @@ async function main() {
       })
       .slice(0, 30)
       .map((r) => ({ titulo: r.titulo, dados: typeof r.dados === 'string' ? safeParse(r.dados) : r.dados }))
+    envelopeData = historicos.map((h) => {
+      const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; valorOrcado?: number | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null } }
+      return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null }
+    })
+    const bucketAlvo = serviceBucket(pdfTexto)
+    const moldeOs = pickMolde(envelopeData, bucketAlvo)
+    const moldeEntry = moldeOs
+      ? historicos.find((h) => (h.dados as HistoricoDados)?.os === moldeOs)
+      : undefined
     baseTexto = [
+      ...(moldeEntry ? [formatMolde(moldeEntry, bucketAlvo)] : []),
       `### Projetos históricos da empresa (${historicos.length} projetos com dados)`,
       ...historicos.map(formatHistorico),
     ].join('\n\n')
-    envelopeData = historicos.map((h) => {
-      const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null } }
-      return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null }
-    })
-    console.log(`Base: ${historicos.length} projetos históricos, ${baseTexto.length} chars`)
+    console.log(`Base: ${historicos.length} projetos | molde=${moldeOs ?? 'nenhum'} (bucket=${bucketAlvo}) | ${baseTexto.length} chars`)
   } finally {
     await prisma.$disconnect()
   }

@@ -32,7 +32,7 @@ export interface HistoricoEnvelope {
 
 // Classify a free-text objeto/produto into a coarse service bucket so the
 // envelope is computed from same-type history, not the AI's cited refs.
-function serviceBucket(s: string | null | undefined): string {
+export function serviceBucket(s: string | null | undefined): string {
   const t = (s ?? '').toLowerCase()
   if (/gerenc/.test(t)) return 'gerenciamento'
   if (/fiscaliz/.test(t)) return 'fiscalizacao'
@@ -55,6 +55,33 @@ function median(xs: number[]): number | null {
   if (!a.length) return null
   const mid = Math.floor(a.length / 2)
   return a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2
+}
+
+/**
+ * Pick the single most REPRESENTATIVE historical project of the same service
+ * type to use as a deterministic composition mold. "Representative" = the
+ * same-bucket project whose precoVenda is the median of that bucket — this
+ * avoids anchoring the AI on the biggest project (which inflates staffing).
+ * Returns the OS code; the caller maps it back to the full dados.
+ */
+export function pickMolde(
+  items: HistoricoEnvelope[],
+  bucketAlvo: string,
+): string | null {
+  const mesmoTipo = items.filter(
+    (h) =>
+      serviceBucket(h.produto) === bucketAlvo &&
+      h.precoVenda &&
+      h.prazoMeses &&
+      h.prazoMeses >= 3,
+  )
+  if (mesmoTipo.length === 0) return null
+  const sorted = [...mesmoTipo].sort(
+    (a, b) => (a.precoVenda as number) - (b.precoVenda as number),
+  )
+  // Lower-median index: representative, never the largest.
+  const idx = Math.floor((sorted.length - 1) / 2)
+  return sorted[idx].os || null
 }
 
 /**

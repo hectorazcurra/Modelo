@@ -3,7 +3,7 @@ import { streamText, convertToModelMessages } from 'ai'
 import { prisma } from '@/lib/db/client'
 import { getModel } from '@/lib/ai/providers'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
-import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, type HistoricoEnvelope } from '@/lib/ai/analyzer'
+import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, serviceBucket, pickMolde, type HistoricoEnvelope } from '@/lib/ai/analyzer'
 import { brl, excerpt } from '@/lib/utils'
 import type { AIProvider, OrcamentoDados, HistoricoDados } from '@/types'
 
@@ -146,7 +146,52 @@ export async function POST(request: NextRequest) {
       return lines.join('\n')
     }
 
+    // ── Deterministic composition mold ────────────────────────────────────
+    // Pick the most representative same-type historical project (median
+    // precoVenda of its service bucket) and present its real team/role
+    // composition as an explicit template. This stops the AI from inferring
+    // staffing from the edital text (which over/under-staffs by 3-4x).
+    const envelopeData: HistoricoEnvelope[] = historicosFormatted.map((h) => {
+      const d = (h.dados ?? {}) as HistoricoDados & { produto?: string | null; tipologia?: string | null }
+      return {
+        os: d.os ?? '',
+        produto: d.produto ?? d.tipologia ?? null,
+        precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null,
+        prazoMeses: d.dashboard?.prazoContrato ?? null,
+      }
+    })
+    const bucketAlvo = serviceBucket(`${projeto.nome ?? ''} ${projeto.pdfTexto ?? ''}`)
+    const moldeOs = pickMolde(envelopeData, bucketAlvo)
+
+    function formatMolde(b: { titulo: string; dados: unknown }): string {
+      const d = (b.dados ?? {}) as HistoricoDados
+      const preco = d.dashboard?.precoVenda ?? d.valorOrcado ?? 0
+      const prazo = d.dashboard?.prazoContrato ?? null
+      const out: string[] = [
+        `## MOLDE DE COMPOSIÇÃO (referência determinística — replique a ESTRUTURA, escale pelo prazo)`,
+        `${b.titulo} — tipo "${bucketAlvo}"${prazo ? ` | prazo ${prazo} meses` : ''}${preco ? ` | preço ${brl(preco)}` : ''}`,
+        `Este é o projeto histórico do MESMO TIPO mais representativo (preço mediano do bucket). Use a composição abaixo como TEMPLATE: replique as MESMAS funções/cargos e a MESMA proporção de horas entre eles, ajustando só a escala pelo prazo do projeto novo e por evidência explícita de porte no edital.`,
+      ]
+      const totCusto = (d.equipes ?? []).reduce((s, e) => s + (e.custoTotal ?? 0), 0)
+      for (const e of d.equipes ?? []) {
+        const hh = e.totalHH ?? 0
+        const custo = e.custoTotal ?? 0
+        const pctCusto = totCusto > 0 ? ((custo / totCusto) * 100).toFixed(1) : '0'
+        out.push(`- Equipe ${e.nome ?? ''}: ${Math.round(hh)}h | ${brl(custo)} | ${pctCusto}% do custo`)
+        const profs = (e as { profissionais?: Array<{ funcao?: string; hh?: number; custo?: number }> }).profissionais
+        for (const p of profs ?? []) {
+          out.push(`    · ${p.funcao ?? ''}: ${Math.round(p.hh ?? 0)}h${p.custo ? ` | ${brl(p.custo)}` : ''}`)
+        }
+      }
+      return out.join('\n')
+    }
+
+    const moldeEntry = moldeOs
+      ? historicosFormatted.find((h) => (h.dados as HistoricoDados)?.os === moldeOs)
+      : undefined
+
     const baseTexto = [
+      ...(moldeEntry ? [formatMolde(moldeEntry)] : []),
       ...(historicosFormatted.length > 0
         ? [
             `### Projetos históricos da empresa (${historicosFormatted.length} projetos com dados)`,
@@ -197,16 +242,7 @@ export async function POST(request: NextRequest) {
         if (orcamentoRaw) {
           // Deterministic envelope enforcement — the model cannot self-enforce
           // the cost cap reliably, so clamp against the real economics of the
-          // historical projects it cited.
-          const envelopeData: HistoricoEnvelope[] = historicosFormatted.map((h) => {
-            const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null } }
-            return {
-              os: d.os ?? '',
-              produto: d.produto ?? d.tipologia ?? null,
-              precoVenda: d.dashboard?.precoVenda ?? null,
-              prazoMeses: d.dashboard?.prazoContrato ?? null,
-            }
-          })
+          // historical projects (envelopeData built above, reused here).
           const { orc: orcamentoData, applied } = clampToEnvelope(orcamentoRaw, envelopeData)
           if (applied) console.log(`[chat] envelope clamp applied to projeto=${projetoId}`)
 

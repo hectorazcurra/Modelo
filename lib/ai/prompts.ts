@@ -28,41 +28,38 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 - Cliente, localidade, prazo
 - Escopo principal em bullets
 
-### Passo 2 — Âncora de PORTE (top-down, NÃO bottom-up)
+### Passo 2 — Use o MOLDE DE COMPOSIÇÃO (não invente a equipe)
 
-⛔ O erro fatal é somar funções de baixo para cima — isso sempre explode 3-4×. A abordagem correta é **top-down**: primeiro estabeleça o ENVELOPE de custo total do projeto a partir de projetos comparáveis, depois distribua dentro dele.
+⛔ O erro fatal é inferir a equipe do texto do edital somando funções de baixo para cima — isso explode 3-4× ou subdimensiona. **NÃO faça isso.**
 
-**2a. Identifique 3-5 projetos comparáveis** (mesmo tipo de serviço — ex: gerenciamento de obra — e porte parecido). Para cada um, calcule a economia normalizada:
+✅ No topo da Base de Conhecimento há um bloco **"## MOLDE DE COMPOSIÇÃO"**: é o projeto histórico real do MESMO TIPO de serviço, mais representativo (preço mediano do tipo). Ele lista as equipes, os cargos/profissionais que as compõem e a % de cada um no custo. **Esse é o seu template obrigatório de estrutura de equipe.**
 
-\`\`\`
-| OS ref   | Tipo          | Preço cliente | Prazo | Preço/mês | Custo/mês  |
-| 2026-043 | Gerenciamento | R$ 795.675    | 3 m   | R$ 265.225| R$ 128.000 |
-| 2026-013 | Gerenciamento | R$ 518.641    | 4 m   | R$ 129.660| R$ ...     |
-| 2026-018 | Gerenciamento | R$ 5.388.589  | 12 m  | R$ 449.049| R$ ...     |
-| → Mediana Preço/mês e Custo/mês                                          |
-\`\`\`
+Regra: replique **as mesmas funções/cargos** e **a mesma proporção de horas/custo entre eles** do MOLDE. Você só ajusta a ESCALA (pelo prazo do projeto novo e por evidência explícita de porte no edital). Não adicione funções que não existem no MOLDE nem remova as que existem, salvo se o edital exigir explicitamente.
 
-**2b. Escolha o múltiplo de porte.** Compare o porte do projeto novo (valor da obra a gerenciar, m², nº de frentes, complexidade) com a mediana dos comparáveis. Se forem equivalentes, fator = 1,0. Documente a justificativa.
+Se NÃO houver bloco MOLDE (tipo de serviço sem histórico), aí sim caia no método de comparáveis: identifique 3-5 projetos do mesmo tipo e use a mediana — e declare ⚠️ que não havia molde.
 
-### Passo 3 — Envelope de custo (o teto que NÃO pode ser estourado)
+### Passo 3 — Envelope de custo (MAGNITUDE vem do tipo, não do MOLDE)
+
+⚠️ O MOLDE define a FORMA da equipe (quais cargos, em que proporção, com que intensidade FTE). Ele **NÃO** define a magnitude — um molde pequeno não significa que o projeto novo é pequeno. A magnitude vem da economia do TIPO de serviço:
 
 \`\`\`
-ENVELOPE_PRECO  = mediana(Preço/mês dos comparáveis) × prazo_novo_meses × fator_porte
-ENVELOPE_CUSTO  = mediana(Custo/mês dos comparáveis) × prazo_novo_meses × fator_porte
+Para cada projeto do MESMO TIPO com prazo ≥ 3 meses: preço/mês = preço_cliente / prazo
+ENVELOPE_PRECO  = mediana(preço/mês do tipo) × prazo_novo_meses × fator_porte
+ENVELOPE_CUSTO  ≈ ENVELOPE_PRECO / markup_MOLDE   (markup = preço/custo do MOLDE; ~1,6 se indisponível)
 \`\`\`
 
-Exiba esses dois números em texto. **A soma de TODAS as linhas (itens + mão de obra) NÃO pode ultrapassar ENVELOPE_CUSTO.** O \`totalGeral\` final deve ficar próximo de ENVELOPE_PRECO (±20%).
+Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês) e a mediana. Exiba ENVELOPE_PRECO e ENVELOPE_CUSTO. **A soma de TODAS as linhas NÃO pode ultrapassar ENVELOPE_CUSTO**; o \`totalGeral\` deve ficar próximo de ENVELOPE_PRECO (±15%).
 
-### Passo 4 — Decomposição DENTRO do envelope
+### Passo 4 — Decomposição: FORMA do MOLDE × MAGNITUDE do envelope
 
-Agora distribua o ENVELOPE_CUSTO entre as funções, usando o projeto comparável mais semelhante como molde de **proporção** (não de valor absoluto):
-
-1. Pegue o projeto comparável mais próximo em porte. Veja a participação % de cada equipe/função no custo total dele (ex: Gerente 35%, Engenheiro 25%, Técnicos 20%, Apoio 20%).
-2. Aplique essas proporções sobre o ENVELOPE_CUSTO do projeto novo.
-3. Para cada função: \`total_funcao = ENVELOPE_CUSTO × participacao%\`. Derive o resto:
-   - \`valorDia\` = tarifa diária da função (custoPorHH histórico × 8) — limitada à realidade da função
-   - \`dias\` = \`total_funcao / (qtd × valorDia)\`, com \`qtd\` = nº de pessoas inteiro
-   - **\`dias\` NUNCA pode exceder \`prazo_novo_meses × 22\`** (12 meses → máx 264). Se exceder, aumente \`qtd\`.
+1. Do MOLDE, extraia a participação % de cada cargo/função no custo total dele e a intensidade FTE de cada um.
+2. Aplique essas % sobre o **ENVELOPE_CUSTO** (Passo 3, magnitude do tipo) — NÃO sobre o custo absoluto do MOLDE: \`total_funcao = ENVELOPE_CUSTO × participacao%_do_MOLDE\`.
+3. Derive os campos do JSON:
+   - \`valorDia\` = tarifa diária da função (custoPorHH do MOLDE × 8)
+   - \`qtd\` = nº de pessoas inteiro (espelhe a intensidade do MOLDE)
+   - \`dias\` = \`total_funcao / (qtd × valorDia)\`
+   - **\`dias\` NUNCA pode exceder \`prazo_servico_meses × 22\`** (12 meses → máx 264). Se exceder, aumente \`qtd\`.
+4. Mantenha a MESMA intensidade de alocação (FTE) do MOLDE: a proporção entre cargos vem do MOLDE; o tamanho total vem do ENVELOPE.
 
 **🛑 Gate de validação INVIOLÁVEL (exiba em texto antes do JSON):**
 
@@ -79,11 +76,10 @@ Agora distribua o ENVELOPE_CUSTO entre as funções, usando o projeto comparáve
 - Só pode ser > 1,0 se o edital LISTAR explicitamente mais entregáveis/frentes que os comparáveis, e mesmo assim **teto 1,3**.
 - "59.000 m² industrial" sozinho NÃO justifica fator > 1,0 — os comparáveis de gerenciamento já embutem porte variado.
 
-**Staffing enxuto é a regra (não a exceção):**
-- Contratos de gerenciamento da Metodo são ENXUTOS. Nos projetos históricos, a maioria das funções está MUITO abaixo de full-time (veja a distribuição de HH das equipes — funções com 40h, 100h, 240h são comuns num projeto de meses).
-- Apenas 1, no máximo 2 funções (tipicamente Engenheiro Residente / Gerente de Obra presencial) são full-time. TODAS as demais são part-time.
-- Replique a INTENSIDADE de alocação (FTE) do comparável mais próximo. Se lá o time todo somou ~4 FTEs-equivalentes, o seu também deve somar ~4, não 9.
-- "Presença contínua em obra" NÃO é justificativa para full-time de todos — só do residente.
+**Staffing espelha o MOLDE (não invente intensidade):**
+- A intensidade de alocação (FTE por cargo) vem do MOLDE, não do seu julgamento. Se no MOLDE a maioria dos cargos tinha 40h, 100h, 240h (part-time), replique part-time.
+- Não promova cargos a full-time por "presença contínua em obra" se o MOLDE não os tinha full-time.
+- Se o MOLDE somou ~N FTEs-equivalentes, o seu também deve somar ~N (ajustado só por prazo/porte), nunca o dobro.
 
 **Prazo: distinga obra vs serviço:**
 - "Prazo da obra/construção: X meses" = duração da construção física.
@@ -91,12 +87,12 @@ Agora distribua o ENVELOPE_CUSTO entre as funções, usando o projeto comparáve
 - Use o prazo do SERVIÇO. Se o edital só dá o prazo da obra, use-o mas registre a premissa explicitamente.
 
 **Exemplo de raciocínio correto:**
-- Comparáveis gerenciamento: Preço/mês mediana R$ 150.000, Custo/mês R$ 90.000
+- MOLDE: gerenciamento R$ 1.200.000 / 8 meses (preço/mês R$ 150.000), markup 1,67 → custo/mês R$ 90.000
 - Projeto novo: 10 meses, porte equivalente → fator 1,0
 - ENVELOPE_PRECO = 150.000 × 10 = R$ 1.500.000 ; ENVELOPE_CUSTO = R$ 900.000
-- Distribui R$ 900.000 entre funções conforme proporção do comparável; 1 residente full-time, resto part-time
+- Replica os MESMOS cargos do MOLDE nas MESMAS proporções de custo; mesma intensidade FTE (1 residente full-time, resto part-time como no MOLDE)
 - Soma das linhas = R$ 880.000 → Razão 0,98 ✓ → entrega
-- ❌ ERRADO: fator 1,4 "porque industrial" + 8 funções full-time → R$ 2,4M e "gate justificado"
+- ❌ ERRADO: inventar 8 funções full-time não presentes no MOLDE → R$ 2,4M e "gate justificado"
 
 ## Formato do bloco de atualização:
 \`\`\`orcamento-update
