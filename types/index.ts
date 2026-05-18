@@ -143,7 +143,13 @@ export interface HistoricoDados {
   } | null
   categorias?: PPUCategoria[] | null
   itens?: Array<{ descricao?: string; unidade?: string; qtd?: number; precoTotal?: number }> | null
-  equipes?: Array<{ nome?: string; totalHH?: number; custoTotal?: number; custoPorHH?: number }> | null
+  equipes?: Array<{
+    nome?: string
+    totalHH?: number
+    custoTotal?: number
+    custoPorHH?: number
+    profissionais?: Array<{ funcao?: string; hh?: number; custo?: number }>
+  }> | null
   cartaConvite?: TextSection
   suprimentos?: TextSection
   engenharia?: TextSection

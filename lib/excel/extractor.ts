@@ -45,6 +45,12 @@ export interface PPUData {
   maoDeObra: number | null
 }
 
+export interface ProfissionalTarefa {
+  funcao: string
+  hh: number
+  custo: number
+}
+
 export interface EquipeTarefa {
   item: number
   nome: string
@@ -53,6 +59,9 @@ export interface EquipeTarefa {
   totalHH: number
   custoTotal: number
   custoPorHH: number
+  // Per-professional/role breakdown from Tarefas block 2 (not summed into
+  // totals — block 1 already holds the authoritative HH/custo).
+  profissionais?: ProfissionalTarefa[]
 }
 
 type Cell = string | number | null | undefined
@@ -420,10 +429,11 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
 
   if (headerRowIdx < 0 || cols.descricao < 0) return []
 
+  let block2Start = rows.length
   for (let r = headerRowIdx + 1; r < rows.length; r++) {
     const row = rows[r]
     // Second header row: belt-and-suspenders stop (some files have a new header)
-    if (row.some((c) => String(c ?? '').trim() === 'Descrição da Equipe')) break
+    if (row.some((c) => String(c ?? '').trim() === 'Descrição da Equipe')) { block2Start = r; break }
     const itemRaw = cols.item >= 0 ? row[cols.item] : null
     const item = typeof itemRaw === 'number' ? itemRaw : parseNumero(itemRaw)
     const descricao = row[cols.descricao]
@@ -433,7 +443,7 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
       // breakdown block 2 (which duplicates the same hours). Stop here.
       const hhRaw = cols.hhTotal >= 0 ? row[cols.hhTotal] : null
       const hhNum = typeof hhRaw === 'number' ? hhRaw : parseFloat(String(hhRaw ?? '').replace(',', '.'))
-      if (Number.isFinite(hhNum) && hhNum > 0) break
+      if (Number.isFinite(hhNum) && hhNum > 0) { block2Start = r; break }
       continue
     }
     const totalHH = parseNumero(cols.hhTotal >= 0 ? row[cols.hhTotal] : null) ?? 0
@@ -454,7 +464,69 @@ export function extractTarefas(workbook: XLSX.WorkBook): EquipeTarefa[] {
     })
   }
 
+  // ── Block 2: per-equipe breakdown (roles/activities) ──────────────────────
+  // Block 2 consistently has columns "Equipe", "Descrição", "HH Total" and
+  // "Custo Total" (col positions vary, so locate by label). We group its data
+  // rows by the equipe sigla and attach the breakdown WITHOUT touching block-1
+  // totals. Where block 2 is absent/empty, profissionais stays undefined.
+  attachProfissionais(rows, block2Start, equipes)
+
   return equipes
+}
+
+function norm(s: string): string {
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
+}
+
+function attachProfissionais(rows: Cell[][], start: number, equipes: EquipeTarefa[]): void {
+  if (start >= rows.length || equipes.length === 0) return
+
+  // Find block-2 header: a row that has both an "Equipe" cell and an "HH Total" cell.
+  let h = -1
+  let cEq = -1, cDesc = -1, cHH = -1, cCusto = -1
+  for (let r = start; r < Math.min(start + 25, rows.length); r++) {
+    const row = rows[r]
+    let eq = -1, desc = -1, hh = -1, cu = -1
+    for (let c = 0; c < row.length; c++) {
+      const v = norm(String(row[c] ?? ''))
+      if (eq < 0 && v === 'equipe') eq = c
+      else if (desc < 0 && v === 'descricao') desc = c
+      else if (hh < 0 && (v === 'hh total' || v === 'hh total por equipe')) hh = c
+      else if (cu < 0 && (v === 'custo total' || v === 'custo total por equipe')) cu = c
+    }
+    if (eq >= 0 && hh >= 0) { h = r; cEq = eq; cDesc = desc; cHH = hh; cCusto = cu; break }
+  }
+  if (h < 0) return
+
+  // sigla → (funcao → {hh,custo})
+  const bySigla = new Map<string, Map<string, { hh: number; custo: number }>>()
+  for (let r = h + 1; r < rows.length; r++) {
+    const row = rows[r]
+    const sigla = cEq >= 0 ? String(row[cEq] ?? '').trim() : ''
+    if (!sigla) continue
+    if (String(row[cEq]).trim() === 'Descrição da Equipe') break // another block
+    const hh = parseNumero(cHH >= 0 ? row[cHH] : null) ?? 0
+    if (hh <= 0) continue
+    const funcao = cDesc >= 0 ? String(row[cDesc] ?? '').trim() : ''
+    if (!funcao) continue
+    const custo = parseMoeda(cCusto >= 0 ? row[cCusto] : null) ?? 0
+    if (!bySigla.has(sigla)) bySigla.set(sigla, new Map())
+    const m = bySigla.get(sigla)!
+    const prev = m.get(funcao) ?? { hh: 0, custo: 0 }
+    m.set(funcao, { hh: prev.hh + hh, custo: prev.custo + custo })
+  }
+  if (bySigla.size === 0) return
+
+  for (const e of equipes) {
+    const key = e.sigla ?? ''
+    const m = bySigla.get(key) ?? bySigla.get(norm(key)) ?? null
+    if (!m) continue
+    const profs = [...m.entries()]
+      .map(([funcao, v]) => ({ funcao, hh: Math.round(v.hh * 100) / 100, custo: Math.round(v.custo * 100) / 100 }))
+      .sort((a, b) => b.hh - a.hh)
+      .slice(0, 30)
+    if (profs.length) e.profissionais = profs
+  }
 }
 
 export function readPricingWorkbook(filePath: string): XLSX.WorkBook {
