@@ -1,6 +1,7 @@
 'use client'
 
-import { ExternalLink } from 'lucide-react'
+import { useState, Fragment } from 'react'
+import { ExternalLink, ChevronRight, ChevronDown } from 'lucide-react'
 import { brl, excerpt } from '@/lib/utils'
 import type { HistoricoDados } from '@/types'
 
@@ -12,6 +13,7 @@ interface HistoricoDetalheViewProps {
 
 export function HistoricoDetalheView({ os, dados: d, mode }: HistoricoDetalheViewProps) {
   const maxExcerpt = mode === 'full' ? 999999 : 800
+  const [expanded, setExpanded] = useState<number | null>(null)
 
   return (
     <div className="space-y-4 px-6 py-4 text-sm">
@@ -123,13 +125,52 @@ export function HistoricoDetalheView({ os, dados: d, mode }: HistoricoDetalheVie
                 const hh = e.totalHH ?? 0
                 const custo = e.custoTotal ?? 0
                 const custoPorH = hh > 0 ? custo / hh : 0
+                const profs = e.profissionais ?? []
+                const isOpen = expanded === i
                 return (
-                <tr key={i} className="border-b border-[#1A1A1A] last:border-0">
-                  <td className="py-1 pr-3 text-[#A3A3A3]">{e.nome ?? '—'}</td>
-                  <td className="py-1 pr-3 text-right text-[#FAFAFA]">{Math.round(hh * 100) / 100}h</td>
-                  <td className="py-1 pr-3 text-right text-[#FAFAFA]">{brl(custo)}</td>
-                  <td className="py-1 text-right text-[#666666]">{brl(custoPorH)}/h</td>
-                </tr>
+                <Fragment key={i}>
+                  <tr
+                    className={`border-b border-[#1A1A1A] last:border-0 ${profs.length ? 'cursor-pointer hover:bg-[#1A1A1A]' : ''}`}
+                    onClick={() => profs.length && setExpanded(isOpen ? null : i)}
+                  >
+                    <td className="py-1 pr-3 text-[#A3A3A3]">
+                      <span className="inline-flex items-center gap-1">
+                        {profs.length ? (
+                          isOpen ? <ChevronDown className="w-3 h-3 text-[#666666]" /> : <ChevronRight className="w-3 h-3 text-[#666666]" />
+                        ) : <span className="w-3 h-3 inline-block" />}
+                        {e.nome ?? '—'}
+                        {profs.length ? <span className="text-[#555555] text-[10px]">({profs.length})</span> : null}
+                      </span>
+                    </td>
+                    <td className="py-1 pr-3 text-right text-[#FAFAFA]">{Math.round(hh * 100) / 100}h</td>
+                    <td className="py-1 pr-3 text-right text-[#FAFAFA]">{brl(custo)}</td>
+                    <td className="py-1 text-right text-[#666666]">{brl(custoPorH)}/h</td>
+                  </tr>
+                  {isOpen && profs.length ? (
+                    <tr className="bg-[#121212]">
+                      <td colSpan={4} className="px-3 py-2">
+                        <table className="w-full text-[11px]">
+                          <thead>
+                            <tr className="text-[#555555]">
+                              <th className="text-left font-normal pb-1">Profissional / item</th>
+                              <th className="text-right font-normal pb-1 pr-3">HH</th>
+                              <th className="text-right font-normal pb-1">Custo</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {profs.map((p, j) => (
+                              <tr key={j}>
+                                <td className="py-0.5 pr-3 text-[#8A8A8A]">{p.funcao ?? '—'}</td>
+                                <td className="py-0.5 pr-3 text-right text-[#A3A3A3]">{Math.round((p.hh ?? 0) * 100) / 100}h</td>
+                                <td className="py-0.5 text-right text-[#A3A3A3]">{brl(p.custo ?? 0)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
                 )
               })}
             </tbody>
