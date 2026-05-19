@@ -29,6 +29,19 @@ interface OrcamentoPanelProps {
 
 type EditingLine = { type: 'item'; idx: number } | { type: 'mdo'; idx: number }
 
+// Cost→price nexus, mirrored from lib/ai/analyzer.recomputeTotais so the UI
+// shows exactly what the server persists. Lines are CUSTO; the client price
+// is custoTotal × (1 + variacaoPerc/100). totalGeral is kept = precoVenda.
+function recalcTotais(d: OrcamentoDados): OrcamentoDados {
+  const totalMateriais = d.itens.reduce((s, i) => s + (i.total || 0), 0)
+  const totalMaoDeObra = d.maoDeObra.reduce((s, m) => s + (m.total || 0), 0)
+  const custoTotal = totalMateriais + totalMaoDeObra
+  const variacaoPerc =
+    Number.isFinite(d.variacaoPerc) && d.variacaoPerc >= 0 ? d.variacaoPerc : 0
+  const precoVenda = Math.round(custoTotal * (1 + variacaoPerc / 100))
+  return { ...d, totalMateriais, totalMaoDeObra, custoTotal, variacaoPerc, precoVenda, totalGeral: precoVenda }
+}
+
 export function OrcamentoPanel({
   dados,
   versao,
@@ -112,13 +125,7 @@ export function OrcamentoPanel({
     const newItens = localDados.itens.map((it, i) =>
       i === idx ? { ...it, ...updated, total: newTotal, status: 'edited' as const } : it
     )
-    const totalMateriais = newItens.reduce((s, it) => s + it.total, 0)
-    const newDados = {
-      ...localDados,
-      itens: newItens,
-      totalMateriais,
-      totalGeral: totalMateriais + (localDados.totalMaoDeObra ?? 0),
-    }
+    const newDados = recalcTotais({ ...localDados, itens: newItens })
     persistLine(newDados, {
       descricao: item.descricao,
       unidade: item.unidade,
@@ -135,13 +142,7 @@ export function OrcamentoPanel({
     const newMdo = localDados.maoDeObra.map((m, i) =>
       i === idx ? { ...m, ...updated, total: newTotal, status: 'edited' as const } : m
     )
-    const totalMaoDeObra = newMdo.reduce((s, m) => s + m.total, 0)
-    const newDados = {
-      ...localDados,
-      maoDeObra: newMdo,
-      totalMaoDeObra,
-      totalGeral: (localDados.totalMateriais ?? 0) + totalMaoDeObra,
-    }
+    const newDados = recalcTotais({ ...localDados, maoDeObra: newMdo })
     persistLine(newDados, {
       descricao: mdo.funcao,
       valorDia: updated.valorDia,
@@ -167,13 +168,17 @@ export function OrcamentoPanel({
       fonte: 'Inserido manualmente',
     }
     const newMdo = [...localDados.maoDeObra, novo]
-    const totalMaoDeObra = newMdo.reduce((s, m) => s + m.total, 0)
-    persistLine({
-      ...localDados,
-      maoDeObra: newMdo,
-      totalMaoDeObra,
-      totalGeral: (localDados.totalMateriais ?? 0) + totalMaoDeObra,
-    }, { descricao: funcao, valorDia: rate * 8, total, tipo: 'mdo' })
+    persistLine(
+      recalcTotais({ ...localDados, maoDeObra: newMdo }),
+      { descricao: funcao, valorDia: rate * 8, total, tipo: 'mdo' },
+    )
+  }
+
+  // Edit the markup % (BDI/margem) — the explicit nexus between cost and the
+  // price charged to the client.
+  function setVariacao(perc: number) {
+    if (!localDados) return
+    persistLine(recalcTotais({ ...localDados, variacaoPerc: perc }))
   }
 
   const pendingCount =
@@ -255,29 +260,51 @@ export function OrcamentoPanel({
           </div>
         )}
 
-        {/* Total destaque */}
-        {localDados.totalGeral > 0 && (
-          <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="text-xs text-[#A3A3A3] mb-0.5">Total Geral</div>
-                <div className="text-2xl font-bold text-amber-400">
-                  {formatCurrency(localDados.totalGeral)}
+        {/* Custo → Variação → Valor a Orçar (nexo explícito) */}
+        {(() => {
+          const cTot =
+            localDados.custoTotal ||
+            (localDados.totalMateriais || 0) + (localDados.totalMaoDeObra || 0) ||
+            localDados.totalGeral ||
+            0
+          const vPerc = Number.isFinite(localDados.variacaoPerc) ? localDados.variacaoPerc : 0
+          const pVenda =
+            localDados.precoVenda || (cTot ? Math.round(cTot * (1 + vPerc / 100)) : 0) || localDados.totalGeral || 0
+          if (cTot <= 0 && pVenda <= 0) return null
+          return (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#A3A3A3]">Custo total do projeto</span>
+                <span className="font-semibold text-[#FAFAFA]">{formatCurrency(cTot)}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-[#A3A3A3]">
+                  Variação para cobrança <span className="text-[#666666]">(BDI/margem)</span>
+                </span>
+                <VariacaoEditor value={vPerc} disabled={saving} onCommit={setVariacao} />
+              </div>
+              <div className="flex items-center justify-between pt-3 border-t border-amber-500/20">
+                <div>
+                  <div className="text-xs text-[#A3A3A3] mb-0.5">Valor a orçar (cobrança ao cliente)</div>
+                  <div className="text-2xl font-bold text-amber-400">{formatCurrency(pVenda)}</div>
+                  <div className="text-[11px] text-[#666666] mt-0.5">
+                    = {formatCurrency(cTot)} + {vPerc.toFixed(1)}%
+                  </div>
+                </div>
+                <div className="text-right space-y-1">
+                  {localDados.areaTotal > 0 && (
+                    <div className="text-xs text-[#A3A3A3]">{localDados.areaTotal} m²</div>
+                  )}
+                  {localDados.custoM2 > 0 && (
+                    <div className="text-sm font-semibold text-[#FAFAFA]">
+                      {formatCurrency(localDados.custoM2)}/m²
+                    </div>
+                  )}
                 </div>
               </div>
-              <div className="text-right space-y-1">
-                {localDados.areaTotal > 0 && (
-                  <div className="text-xs text-[#A3A3A3]">{localDados.areaTotal} m²</div>
-                )}
-                {localDados.custoM2 > 0 && (
-                  <div className="text-sm font-semibold text-[#FAFAFA]">
-                    {formatCurrency(localDados.custoM2)}/m²
-                  </div>
-                )}
-              </div>
             </div>
-          </div>
-        )}
+          )
+        })()}
 
         {/* Resumo */}
         <Section title="Resumo Executivo" icon={<FileText className="w-4 h-4" />} defaultOpen>
@@ -764,6 +791,67 @@ function AddMdoForm({
         </button>
       </div>
     </div>
+  )
+}
+
+// Inline editor for the markup % (the explicit cost→price nexus). Idle shows
+// the value with a pencil; clicking turns it into a number input that commits
+// on Enter/blur.
+function VariacaoEditor({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: number
+  disabled?: boolean
+  onCommit: (perc: number) => void
+}) {
+  const [editing, setEditing] = useState(false)
+  const [draft, setDraft] = useState(String(value))
+
+  useEffect(() => {
+    if (!editing) setDraft(String(value))
+  }, [value, editing])
+
+  function commit() {
+    setEditing(false)
+    const n = parseFloat(draft.replace(',', '.'))
+    if (Number.isFinite(n) && n >= 0 && n !== value) onCommit(n)
+  }
+
+  if (!editing) {
+    return (
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setEditing(true)}
+        className="group inline-flex items-center gap-1.5 font-semibold text-amber-400 disabled:opacity-50"
+        title="Editar variação"
+      >
+        +{value.toFixed(1)}%
+        <Pencil className="w-3 h-3 text-[#666666] group-hover:text-amber-400" />
+      </button>
+    )
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        autoFocus
+        type="number"
+        step="0.1"
+        min="0"
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') commit()
+          if (e.key === 'Escape') setEditing(false)
+        }}
+        className="w-20 bg-[#0A0A0A] border border-amber-500/40 rounded px-2 py-0.5 text-right text-sm text-amber-400 focus:outline-none focus:border-amber-400"
+      />
+      <span className="text-[#666666] text-sm">%</span>
+    </span>
   )
 }
 

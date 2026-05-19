@@ -3,7 +3,7 @@ import { streamText, convertToModelMessages } from 'ai'
 import { prisma } from '@/lib/db/client'
 import { getModel } from '@/lib/ai/providers'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
-import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, serviceBucket, pickMolde, type HistoricoEnvelope } from '@/lib/ai/analyzer'
+import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, type HistoricoEnvelope } from '@/lib/ai/analyzer'
 import { brl, excerpt } from '@/lib/utils'
 import type { AIProvider, OrcamentoDados, HistoricoDados } from '@/types'
 
@@ -158,12 +158,18 @@ export async function POST(request: NextRequest) {
         produto: d.produto ?? d.tipologia ?? null,
         precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null,
         prazoMeses: d.dashboard?.prazoContrato ?? null,
+        margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null,
       }
     })
     // Classify from a SHORT signal (project name + edital head, where the
     // object/title lives) — not the whole multi-page text, which is noisy.
     const bucketAlvo = serviceBucket(`${projeto.nome ?? ''} ${(projeto.pdfTexto ?? '').slice(0, 600)}`)
     const moldeOs = pickMolde(envelopeData, bucketAlvo)
+    // Default markup (custo→preço) when the edital states no explicit
+    // BDI/margem: median of same-type history. Fed to the model AND used as
+    // the deterministic fallback in onFinish (the model can't reliably
+    // multiply custo×(1+v) consistently).
+    const variacaoSugerida = medianMargem(envelopeData, bucketAlvo)
 
     function formatMolde(b: { titulo: string; dados: unknown }): string {
       const d = (b.dados ?? {}) as HistoricoDados
@@ -192,7 +198,16 @@ export async function POST(request: NextRequest) {
       ? historicosFormatted.find((h) => (h.dados as HistoricoDados)?.os === moldeOs)
       : undefined
 
+    const variacaoTexto =
+      variacaoSugerida != null
+        ? `## VARIAÇÃO PADRÃO (markup custo→preço)\n` +
+          `As linhas do orçamento são CUSTO puro. O preço cobrado do cliente é custoTotal × (1 + variacaoPerc/100).\n` +
+          `Se o edital declarar BDI/margem explícito, use-o em "variacaoPerc". Caso contrário, use a VARIAÇÃO PADRÃO = ` +
+          `${variacaoSugerida.toFixed(1)}% (mediana de margem dos projetos "${bucketAlvo}" do histórico).`
+        : ''
+
     const baseTexto = [
+      ...(variacaoTexto ? [variacaoTexto] : []),
       ...(moldeEntry ? [formatMolde(moldeEntry)] : []),
       ...(historicosFormatted.length > 0
         ? [
@@ -245,8 +260,12 @@ export async function POST(request: NextRequest) {
           // Deterministic envelope enforcement — the model cannot self-enforce
           // the cost cap reliably, so clamp against the real economics of the
           // historical projects (envelopeData built above, reused here).
-          const { orc: orcamentoData, applied } = clampToEnvelope(orcamentoRaw, envelopeData)
+          const { orc: orcClamped, applied } = clampToEnvelope(orcamentoRaw, envelopeData)
           if (applied) console.log(`[chat] envelope clamp applied to projeto=${projetoId}`)
+          // Source of truth for the cost→price split: re-derive custoTotal /
+          // precoVenda / totalGeral from the (possibly clamped) CUSTO lines,
+          // defaulting variacaoPerc to the same-type historical median.
+          const orcamentoData = recomputeTotais(orcClamped, variacaoSugerida)
 
           const existingOrc = await prisma.orcamento.findUnique({ where: { projetoId } })
           const dados = orcamentoData as unknown as Parameters<typeof prisma.orcamento.create>[0]['data']['dados']

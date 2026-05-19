@@ -28,6 +28,54 @@ export interface HistoricoEnvelope {
   produto: string | null      // service type, e.g. "GERENCIAMENTO", "PROJETO"
   precoVenda: number | null
   prazoMeses: number | null
+  margemPerc: number | null   // markup over cost as a fraction (0.25 = 25%)
+}
+
+/**
+ * Median markup (variação custo→preço), as a PERCENT, of same-type history.
+ * Used as the default variacaoPerc when the edital states no explicit
+ * BDI/margem. Mirrors clampToEnvelope's same-type / prazo≥3 filter so the
+ * suggested markup is coherent with the envelope.
+ */
+export function medianMargem(
+  items: HistoricoEnvelope[],
+  bucketAlvo: string,
+): number | null {
+  const ms = items
+    .filter((h) => serviceBucket(h.produto) === bucketAlvo && h.prazoMeses && h.prazoMeses >= 3)
+    .map((h) => h.margemPerc)
+    .filter((m): m is number => Number.isFinite(m) && (m as number) > 0)
+  const med = median(ms)
+  return med == null ? null : Math.round(med * 1000) / 10 // fraction → percent
+}
+
+/**
+ * Deterministically derive the cost→price split. Line totals are CUSTO; the
+ * client price is custoTotal × (1 + variacaoPerc/100). The model cannot
+ * reliably do this arithmetic, so both the chat route and the harness call
+ * this as the source of truth before persisting. totalGeral is kept = the
+ * client price so the envelope clamp (priced in client terms) keeps working.
+ */
+export function recomputeTotais(
+  orc: OrcamentoDados,
+  fallbackVarPerc: number | null,
+): OrcamentoDados {
+  const totalMateriais = (orc.itens ?? []).reduce((s, i) => s + (i.total || 0), 0)
+  const totalMaoDeObra = (orc.maoDeObra ?? []).reduce((s, m) => s + (m.total || 0), 0)
+  const custoTotal = totalMateriais + totalMaoDeObra
+  const v = orc.variacaoPerc
+  const variacaoPerc =
+    Number.isFinite(v) && (v as number) > 0 ? (v as number) : fallbackVarPerc ?? 0
+  const precoVenda = Math.round(custoTotal * (1 + variacaoPerc / 100))
+  return {
+    ...orc,
+    totalMateriais,
+    totalMaoDeObra,
+    custoTotal,
+    variacaoPerc,
+    precoVenda,
+    totalGeral: precoVenda,
+  }
 }
 
 // Classify a free-text objeto/produto into a coarse service bucket so the
@@ -136,22 +184,26 @@ export function clampToEnvelope(
   const factor = envelopePreco / orc.totalGeral
   const scale = (n: number | undefined) => Math.round((n ?? 0) * factor)
 
-  const adjusted: OrcamentoDados = {
-    ...orc,
-    itens: (orc.itens ?? []).map((i) => ({
-      ...i,
-      custoUnit: i.qtd ? scale(i.total) / i.qtd : scale(i.custoUnit),
-      total: scale(i.total),
-    })),
-    maoDeObra: (orc.maoDeObra ?? []).map((m) => {
-      const novoTotal = scale(m.total)
-      const dias = m.qtd && m.valorDia ? Math.round(novoTotal / (m.qtd * m.valorDia)) : m.dias
-      return { ...m, total: novoTotal, dias }
-    }),
-    totalMateriais: scale(orc.totalMateriais),
-    totalMaoDeObra: scale(orc.totalMaoDeObra),
-    totalGeral: scale(orc.totalGeral),
-  }
+  // Scale the CUSTO lines down by the factor, then re-derive custoTotal /
+  // precoVenda / totalGeral from them so the cost→price nexus stays exact
+  // (variacaoPerc is preserved; the envelope is priced in client terms, so
+  // scaling cost by factor lands precoVenda on envelopePreco).
+  const adjusted: OrcamentoDados = recomputeTotais(
+    {
+      ...orc,
+      itens: (orc.itens ?? []).map((i) => ({
+        ...i,
+        custoUnit: i.qtd ? scale(i.total) / i.qtd : scale(i.custoUnit),
+        total: scale(i.total),
+      })),
+      maoDeObra: (orc.maoDeObra ?? []).map((m) => {
+        const novoTotal = scale(m.total)
+        const dias = m.qtd && m.valorDia ? Math.round(novoTotal / (m.qtd * m.valorDia)) : m.dias
+        return { ...m, total: novoTotal, dias }
+      }),
+    },
+    orc.variacaoPerc,
+  )
 
   const dir = factor < 1 ? 'excedia' : 'estava abaixo d'
   const note =
@@ -183,6 +235,9 @@ export const orcamentoVazio: OrcamentoDados = {
   cronograma: [],
   totalMateriais: 0,
   totalMaoDeObra: 0,
+  custoTotal: 0,
+  variacaoPerc: 0,
+  precoVenda: 0,
   totalGeral: 0,
   observacoes: '',
 }

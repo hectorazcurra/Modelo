@@ -74,6 +74,13 @@ export interface OrcamentoDados {
   cronograma: FaseCronograma[]
   totalMateriais: number
   totalMaoDeObra: number
+  // Custo direto = totalMateriais + totalMaoDeObra (linhas são CUSTO puro,
+  // sem BDI/margem). variacaoPerc é o markup (%) aplicado por cima para
+  // chegar ao preço cobrado do cliente. precoVenda = custoTotal × (1+var/100).
+  // totalGeral é mantido = precoVenda (compatibilidade + clamp de envelope).
+  custoTotal: number
+  variacaoPerc: number
+  precoVenda: number
   totalGeral: number
   observacoes: string
   // True when there is NO historical reference of this service type — the AI

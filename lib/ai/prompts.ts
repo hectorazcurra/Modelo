@@ -20,7 +20,8 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 5. **Nunca consulte referências externas**: Não use SINAPI, TCPO, tabelas de mercado ou qualquer dado que não esteja explicitamente na base abaixo.
 6. **NUNCA assuma full-time (100% FTE) para todas as funções**: a maioria dos projetos de gerenciamento tem dedicação VARIÁVEL por função. Use o HH real por função do projeto histórico de referência (campo "totalHH" das equipes). Em 22 dias úteis × 8h, 1 FTE = 176h/mês — funções com HH muito abaixo disso SÃO part-time e devem permanecer assim na sua projeção.
 7. **Prazo vem do edital, não do histórico**: leia o prazo do projeto novo no edital (procure "prazo", "duração", "X meses", "X semanas"). Use ESSE prazo para todos os cálculos. NÃO copie o prazo do projeto histórico de referência.
-8. **SEM histórico do tipo → NÃO orce**: se NÃO houver bloco MOLDE E não houver ≥3 projetos do mesmo tipo de serviço na base, é PROIBIDO estimar valores. Não invente horas nem preços. Em vez disso: defina \`"semReferencia": true\`, deixe \`maoDeObra\` e \`itens\` vazios (ou com \`semHistorico: true\` e valores 0), zere os totais, e em \`observacoes\` explique claramente que não há projeto histórico comparável deste tipo e que o usuário deve inserir os valores manualmente. Ainda assim preencha \`resumo\` e \`resumo.contexto\` normalmente.
+8. **Linhas são CUSTO puro**: \`custoUnit\` e \`total\` de CADA linha (itens e mão de obra) são CUSTO, SEM BDI/margem/impostos. O preço cobrado do cliente NÃO está nas linhas — ele é derivado: \`precoVenda = custoTotal × (1 + variacaoPerc/100)\`, onde \`custoTotal = totalMateriais + totalMaoDeObra\`. Preencha \`variacaoPerc\` (em %) com o BDI/margem explícito do edital; se o edital não declarar, use a **VARIAÇÃO PADRÃO** informada na Base de Conhecimento. \`totalGeral\` = \`precoVenda\`. Nunca embuta a margem nas linhas.
+9. **SEM histórico do tipo → NÃO orce**: se NÃO houver bloco MOLDE E não houver ≥3 projetos do mesmo tipo de serviço na base, é PROIBIDO estimar valores. Não invente horas nem preços. Em vez disso: defina \`"semReferencia": true\`, deixe \`maoDeObra\` e \`itens\` vazios (ou com \`semHistorico: true\` e valores 0), zere os totais, e em \`observacoes\` explique claramente que não há projeto histórico comparável deste tipo e que o usuário deve inserir os valores manualmente. Ainda assim preencha \`resumo\` e \`resumo.contexto\` normalmente.
 
 ## Fluxo de análise ao receber um edital / carta convite:
 
@@ -39,7 +40,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 
 Não use MOLDE nem envelope de magnitude. Em vez disso:
 1. Localize nos anexos (.xlsx/PDF: DPF, PPU, BMS) a lista de **postos/categorias** e suas **quantidades** (ex: "108 und-mês", "Categoria A: N postos × M meses").
-2. Para cada categoria, derive o **preço unitário** (custo do posto/mês + encargos + BDI). Use o histórico só como referência de tarifa/hora quando o anexo não der o custo.
+2. Para cada categoria, derive o **custo unitário** (custo do posto/mês + encargos, **SEM BDI/margem** — a margem entra em \`variacaoPerc\`, não na linha). Use o histórico só como referência de tarifa/hora quando o anexo não der o custo.
 3. \`totalGeral = Σ(preço_unitário × quantidade)\`. Liste cada categoria como uma linha em \`itens\` (qtd = quantidade, custoUnit = preço unitário).
 4. Declare ⚠️ os itens sem preço no anexo (veículos, encargos a preencher pelo DP) para inserção manual.
 5. NUNCA entregue totalGeral = 0: se faltar quantidade, estime pelo texto do edital e sinalize a premissa.
@@ -61,7 +62,7 @@ Se NÃO houver bloco MOLDE (tipo de serviço sem histórico), aí sim caia no m�
 \`\`\`
 Para cada projeto do MESMO TIPO com prazo ≥ 3 meses: preço/mês = preço_cliente / prazo
 ENVELOPE_PRECO  = mediana(preço/mês do tipo) × prazo_novo_meses × fator_porte
-ENVELOPE_CUSTO  ≈ ENVELOPE_PRECO / markup_MOLDE   (markup = preço/custo do MOLDE; ~1,6 se indisponível)
+ENVELOPE_CUSTO  ≈ ENVELOPE_PRECO / (1 + variacaoPerc/100)   (variacaoPerc = BDI/margem do edital ou a VARIAÇÃO PADRÃO da Base)
 \`\`\`
 
 Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês) e a mediana. Exiba ENVELOPE_PRECO e ENVELOPE_CUSTO. **A soma de TODAS as linhas NÃO pode ultrapassar ENVELOPE_CUSTO**; o \`totalGeral\` deve ficar próximo de ENVELOPE_PRECO (±15%).
@@ -158,14 +159,19 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
   ],
   "totalMateriais": 0,
   "totalMaoDeObra": 0,
+  "custoTotal": 0,
+  "variacaoPerc": 0,
+  "precoVenda": 0,
   "totalGeral": 0,
-  "observacoes": "Fontes utilizadas: OS XXXX - CLIENTE (horas equipe), OS YYYY - CLIENTE (custo unitário)"
+  "observacoes": "Fontes utilizadas: OS XXXX - CLIENTE (horas equipe), OS YYYY - CLIENTE (custo unitário). Variação aplicada: X% (BDI/margem do edital | VARIAÇÃO PADRÃO do histórico)."
 }
 \`\`\`
 
 **Campo "resumo.contexto" (OBRIGATÓRIO)**: sempre escreva 3-5 frases, em português claro e sem jargão, explicando o que o cliente pediu, a necessidade por trás, o escopo macro e restrições relevantes. É o que o usuário lê primeiro para validar se as horas e preços propostos fazem sentido.
 
-**Campo "semReferencia"**: \`true\` somente quando não há MOLDE nem ≥3 projetos do mesmo tipo (regra absoluta 8). Nesse caso não estime valores — deixe linhas vazias/zeradas e explique em \`observacoes\`.
+**Campos "custoTotal" / "variacaoPerc" / "precoVenda" / "totalGeral"**: as linhas são CUSTO. \`custoTotal = totalMateriais + totalMaoDeObra\`. \`variacaoPerc\` (%) = BDI/margem explícito do edital, ou a VARIAÇÃO PADRÃO da Base se o edital não declarar. \`precoVenda = round(custoTotal × (1 + variacaoPerc/100))\`. \`totalGeral = precoVenda\`. (O sistema recalcula estes 4 campos de forma determinística — preencha-os, mas mantenha-os coerentes.)
+
+**Campo "semReferencia"**: \`true\` somente quando não há MOLDE nem ≥3 projetos do mesmo tipo (regra absoluta 9). Nesse caso não estime valores — deixe linhas vazias/zeradas e explique em \`observacoes\`.
 
 **Regras dos campos "fonte", "fonteOs" e "referencias"**:
 - "fonte": texto completo da fonte primária (a OS escolhida como representativa), ex: "OS 2026-013 - SCALA DATA CENTERS (mediana de 3 referências)". Se não houver, coloque "Sem histórico" e defina "semHistorico": true.
