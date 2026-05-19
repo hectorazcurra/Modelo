@@ -119,13 +119,17 @@ export function clampToEnvelope(
   if (medMes == null) return { orc, applied: false, note: '' }
 
   const envelopePreco = medMes * prazoNovo
-  const ratio = orc.totalGeral / envelopePreco
-  // Bidirectional: the LLM swings both ways (same input → -60% or +20% even
-  // at low temperature). The deterministic type-envelope is the anchor in
-  // BOTH directions — scale down when over, UP when far under. Only fires
-  // outside the tolerance band, and only when there are ≥3 same-type
-  // comparables (guard above), so genuine outliers aren't force-normalized.
-  if (ratio >= 1 - tolerancePct && ratio <= 1 + tolerancePct) {
+  // DOWN-ONLY clamp. It caps runaway over-pricing (the original failure mode:
+  // 3-4× explosions) but must NOT scale UP: "below the type median" is
+  // ambiguous — it can mean the AI missed scope (VIVO) OR the project is
+  // genuinely small (C&A: a 1-store job is 4× below the gerenciamento median
+  // because the base is biased to large multi-front projects). Scaling such
+  // a correct small estimate up to the median produced +323% over-quotes.
+  // Under-estimates are left as-is for human review (commercially safer than
+  // a blown-up over-quote, and the AI often reads explicit edital cost
+  // signals correctly on its own).
+  const limite = envelopePreco * (1 + tolerancePct)
+  if (orc.totalGeral <= limite) {
     return { orc, applied: false, note: '' }
   }
 
