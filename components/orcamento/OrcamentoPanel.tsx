@@ -150,6 +150,32 @@ export function OrcamentoPanel({
     })
   }
 
+  // #4 — add a manual labor line (description + hours + R$/hour)
+  function addMdo(funcao: string, hh: number, rate: number) {
+    if (!localDados) return
+    const total = hh * rate
+    // Schema stays qtd×dias×valorDia: qtd=1, dias=hh/8 (working days),
+    // valorDia=rate×8 → product = hh×rate.
+    const novo: MaoDeObra = {
+      funcao,
+      qtd: 1,
+      dias: hh / 8,
+      valorDia: rate * 8,
+      total,
+      semHistorico: true,
+      status: 'edited',
+      fonte: 'Inserido manualmente',
+    }
+    const newMdo = [...localDados.maoDeObra, novo]
+    const totalMaoDeObra = newMdo.reduce((s, m) => s + m.total, 0)
+    persistLine({
+      ...localDados,
+      maoDeObra: newMdo,
+      totalMaoDeObra,
+      totalGeral: (localDados.totalMateriais ?? 0) + totalMaoDeObra,
+    }, { descricao: funcao, valorDia: rate * 8, total, tipo: 'mdo' })
+  }
+
   const pendingCount =
     localDados.itens.filter((i) => !i.status || i.status === 'pending').length +
     localDados.maoDeObra.filter((m) => !m.status || m.status === 'pending').length
@@ -196,6 +222,38 @@ export function OrcamentoPanel({
             )}
           </div>
         </div>
+
+        {/* #1 — Sem referência histórica */}
+        {localDados.semReferencia && (
+          <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
+            <div className="flex items-start gap-2">
+              <span className="text-amber-400 text-base leading-none mt-0.5">⚠️</span>
+              <div className="text-sm">
+                <div className="font-semibold text-amber-400 mb-1">
+                  Sem histórico comparável para este tipo de serviço
+                </div>
+                <p className="text-[#A3A3A3] leading-relaxed">
+                  Não há projeto histórico semelhante na base para estimar valores com
+                  confiança. Os valores <strong>não foram calculados pela IA</strong>.
+                  Use o botão <strong>+ Adicionar linha</strong> em Mão de Obra para
+                  inserir as funções, horas e preço/hora manualmente.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* #2 — Contexto do pedido do cliente */}
+        {localDados.resumo.contexto && (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#141414] p-4">
+            <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider mb-1.5">
+              Contexto do pedido
+            </div>
+            <p className="text-sm text-[#A3A3A3] leading-relaxed">
+              {localDados.resumo.contexto}
+            </p>
+          </div>
+        )}
 
         {/* Total destaque */}
         {localDados.totalGeral > 0 && (
@@ -298,9 +356,9 @@ export function OrcamentoPanel({
           </Section>
         )}
 
-        {/* Mão de obra */}
-        {localDados.maoDeObra.length > 0 && (
-          <Section title="Mão de Obra" icon={<Users className="w-4 h-4" />}>
+        {/* Mão de obra — sempre visível para permitir inserção manual */}
+        {(localDados.maoDeObra.length > 0 || localDados.semReferencia) && (
+          <Section title="Mão de Obra" icon={<Users className="w-4 h-4" />} defaultOpen>
             <div className="space-y-0.5">
               {localDados.maoDeObra.map((item, i) => {
                 const isEditing = editingLine?.type === 'mdo' && editingLine.idx === i
@@ -318,6 +376,9 @@ export function OrcamentoPanel({
                   />
                 )
               })}
+
+              <AddMdoForm disabled={saving} onAdd={addMdo} />
+
               <div className="flex justify-between pt-2 border-t border-[#2A2A2A]">
                 <span className="text-sm font-semibold text-[#FAFAFA]">Total Mão de Obra</span>
                 <span className="text-sm font-bold text-amber-400">
@@ -506,18 +567,25 @@ function MdoLine({
   onConfirmEdit,
   onOpenModal,
 }: MdoLineProps) {
-  const [qtd, setQtd] = useState(item.qtd)
-  const [dias, setDias] = useState(item.dias)
-  const [valorDia, setValorDia] = useState(item.valorDia)
+  // Hours-centric: the user thinks in total hours (HH) and R$/hour, matching
+  // the historical data. Schema stays qtd×dias×valorDia (8h/day jornada).
+  const curHH = Math.round((item.qtd || 0) * (item.dias || 0) * 8 * 100) / 100
+  const curRate = curHH > 0 ? Math.round((item.total / curHH) * 100) / 100 : 0
+  const [hh, setHH] = useState(curHH)
+  const [rate, setRate] = useState(curRate)
 
   useEffect(() => {
-    setQtd(item.qtd)
-    setDias(item.dias)
-    setValorDia(item.valorDia)
-  }, [item.qtd, item.dias, item.valorDia])
+    setHH(curHH)
+    setRate(curRate)
+  }, [curHH, curRate])
 
   const status = item.status ?? 'pending'
   const isConfirmed = status === 'accepted' || status === 'edited'
+
+  function confirm() {
+    // Persist back into schema: qtd=1, dias=HH/8, valorDia=rate×8 → total=HH×rate
+    onConfirmEdit({ qtd: 1, dias: hh / 8, valorDia: rate * 8 })
+  }
 
   return (
     <div className="py-1.5 border-b border-[#1A1A1A] last:border-0">
@@ -539,26 +607,22 @@ function MdoLine({
           <div className="flex items-center gap-1 flex-shrink-0 text-[#666666]">
             <input
               type="number"
-              value={qtd}
-              onChange={(e) => setQtd(parseFloat(e.target.value) || 0)}
-              className="w-8 text-center bg-[#0A0A0A] border border-[#333] rounded px-1 py-0.5 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
+              value={hh}
+              onChange={(e) => setHH(parseFloat(e.target.value) || 0)}
+              title="Total de horas"
+              className="w-14 text-center bg-[#0A0A0A] border border-[#333] rounded px-1 py-0.5 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
             />
-            <span>×</span>
+            <span>h ×</span>
             <input
               type="number"
-              value={dias}
-              onChange={(e) => setDias(parseFloat(e.target.value) || 0)}
-              className="w-8 text-center bg-[#0A0A0A] border border-[#333] rounded px-1 py-0.5 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
-            />
-            <span>d ×</span>
-            <input
-              type="number"
-              value={valorDia}
-              onChange={(e) => setValorDia(parseFloat(e.target.value) || 0)}
+              value={rate}
+              onChange={(e) => setRate(parseFloat(e.target.value) || 0)}
+              title="Preço por hora (R$)"
               className="w-16 text-right bg-[#0A0A0A] border border-[#333] rounded px-1 py-0.5 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
             />
+            <span>/h</span>
             <button
-              onClick={() => onConfirmEdit({ qtd, dias, valorDia })}
+              onClick={confirm}
               disabled={disabled}
               className="p-0.5 rounded text-green-400 hover:bg-green-400/10 transition-colors disabled:opacity-50"
             >
@@ -573,8 +637,8 @@ function MdoLine({
           </div>
         ) : (
           <div className="flex items-center gap-1 flex-shrink-0">
-            <span className="text-[#666666] w-20 text-center">
-              {item.qtd}× · {item.dias}d
+            <span className="text-[#666666] w-24 text-center">
+              {curHH}h · {formatCurrency(curRate)}/h
             </span>
             <span className="text-[#FAFAFA] w-22 text-right font-medium">
               {formatCurrency(item.total)}
@@ -619,6 +683,86 @@ function MdoLine({
           )}
         </div>
       )}
+    </div>
+  )
+}
+
+// #4 — manual labor line: descrição + horas + R$/hora
+function AddMdoForm({
+  disabled,
+  onAdd,
+}: {
+  disabled: boolean
+  onAdd: (funcao: string, hh: number, rate: number) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const [funcao, setFuncao] = useState('')
+  const [hh, setHH] = useState<number | ''>('')
+  const [rate, setRate] = useState<number | ''>('')
+
+  const valid = funcao.trim() !== '' && Number(hh) > 0 && Number(rate) > 0
+
+  function submit() {
+    if (!valid) return
+    onAdd(funcao.trim(), Number(hh), Number(rate))
+    setFuncao(''); setHH(''); setRate(''); setOpen(false)
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        disabled={disabled}
+        className="mt-1 inline-flex items-center gap-1 text-xs text-amber-400/70 hover:text-amber-400 transition-colors disabled:opacity-40"
+      >
+        <span className="text-sm leading-none">+</span> Adicionar linha
+      </button>
+    )
+  }
+
+  return (
+    <div className="mt-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2 space-y-1.5">
+      <input
+        autoFocus
+        value={funcao}
+        onChange={(e) => setFuncao(e.target.value)}
+        placeholder="Descrição da função / serviço"
+        className="w-full text-xs bg-[#0A0A0A] border border-[#333] rounded px-2 py-1 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
+      />
+      <div className="flex items-center gap-1 text-xs text-[#666666]">
+        <input
+          type="number"
+          value={hh}
+          onChange={(e) => setHH(e.target.value === '' ? '' : parseFloat(e.target.value))}
+          placeholder="horas"
+          className="w-16 text-center bg-[#0A0A0A] border border-[#333] rounded px-1 py-1 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
+        />
+        <span>h ×</span>
+        <input
+          type="number"
+          value={rate}
+          onChange={(e) => setRate(e.target.value === '' ? '' : parseFloat(e.target.value))}
+          placeholder="R$/h"
+          className="w-20 text-right bg-[#0A0A0A] border border-[#333] rounded px-1 py-1 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
+        />
+        <span>/h</span>
+        <span className="ml-auto text-[#A3A3A3]">
+          {Number(hh) > 0 && Number(rate) > 0 ? formatCurrency(Number(hh) * Number(rate)) : '—'}
+        </span>
+        <button
+          onClick={submit}
+          disabled={!valid || disabled}
+          className="p-0.5 rounded text-green-400 hover:bg-green-400/10 transition-colors disabled:opacity-40"
+        >
+          <Check className="w-3.5 h-3.5" />
+        </button>
+        <button
+          onClick={() => { setOpen(false); setFuncao(''); setHH(''); setRate('') }}
+          className="p-0.5 rounded text-[#666666] hover:text-[#A3A3A3] transition-colors"
+        >
+          <X className="w-3.5 h-3.5" />
+        </button>
+      </div>
     </div>
   )
 }

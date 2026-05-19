@@ -62,6 +62,9 @@ export interface OrcamentoDados {
     prazo: string
     responsavel: string
     numeroEdital?: string
+    // Narrative summary of what the client is asking for (3-5 sentences,
+    // plain language) so the user can validate hours/rates against intent.
+    contexto?: string
   }
   escopo: string[]
   itens: OrcamentoItem[]
@@ -73,6 +76,9 @@ export interface OrcamentoDados {
   totalMaoDeObra: number
   totalGeral: number
   observacoes: string
+  // True when there is NO historical reference of this service type — the AI
+  // must NOT fabricate values; the user inserts them manually.
+  semReferencia?: boolean
 }
 
 export interface ProjetoComRelacoes {

@@ -20,6 +20,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 5. **Nunca consulte referências externas**: Não use SINAPI, TCPO, tabelas de mercado ou qualquer dado que não esteja explicitamente na base abaixo.
 6. **NUNCA assuma full-time (100% FTE) para todas as funções**: a maioria dos projetos de gerenciamento tem dedicação VARIÁVEL por função. Use o HH real por função do projeto histórico de referência (campo "totalHH" das equipes). Em 22 dias úteis × 8h, 1 FTE = 176h/mês — funções com HH muito abaixo disso SÃO part-time e devem permanecer assim na sua projeção.
 7. **Prazo vem do edital, não do histórico**: leia o prazo do projeto novo no edital (procure "prazo", "duração", "X meses", "X semanas"). Use ESSE prazo para todos os cálculos. NÃO copie o prazo do projeto histórico de referência.
+8. **SEM histórico do tipo → NÃO orce**: se NÃO houver bloco MOLDE E não houver ≥3 projetos do mesmo tipo de serviço na base, é PROIBIDO estimar valores. Não invente horas nem preços. Em vez disso: defina \`"semReferencia": true\`, deixe \`maoDeObra\` e \`itens\` vazios (ou com \`semHistorico: true\` e valores 0), zere os totais, e em \`observacoes\` explique claramente que não há projeto histórico comparável deste tipo e que o usuário deve inserir os valores manualmente. Ainda assim preencha \`resumo\` e \`resumo.contexto\` normalmente.
 
 ## Fluxo de análise ao receber um edital / carta convite:
 
@@ -112,7 +113,8 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
 ## Formato do bloco de atualização:
 \`\`\`orcamento-update
 {
-  "resumo": { "objeto": "...", "local": "...", "prazo": "...", "responsavel": "...", "numeroEdital": "..." },
+  "resumo": { "objeto": "...", "local": "...", "prazo": "...", "responsavel": "...", "numeroEdital": "...", "contexto": "Resumo em 3-5 frases, em linguagem clara, do que o cliente está pedindo e por quê (necessidade, escopo macro, restrições) — para o usuário ler, entender e validar se horas/preços fazem sentido." },
+  "semReferencia": false,
   "escopo": ["item 1", "item 2"],
   "itens": [
     {
@@ -160,6 +162,10 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
   "observacoes": "Fontes utilizadas: OS XXXX - CLIENTE (horas equipe), OS YYYY - CLIENTE (custo unitário)"
 }
 \`\`\`
+
+**Campo "resumo.contexto" (OBRIGATÓRIO)**: sempre escreva 3-5 frases, em português claro e sem jargão, explicando o que o cliente pediu, a necessidade por trás, o escopo macro e restrições relevantes. É o que o usuário lê primeiro para validar se as horas e preços propostos fazem sentido.
+
+**Campo "semReferencia"**: \`true\` somente quando não há MOLDE nem ≥3 projetos do mesmo tipo (regra absoluta 8). Nesse caso não estime valores — deixe linhas vazias/zeradas e explique em \`observacoes\`.
 
 **Regras dos campos "fonte", "fonteOs" e "referencias"**:
 - "fonte": texto completo da fonte primária (a OS escolhida como representativa), ex: "OS 2026-013 - SCALA DATA CENTERS (mediana de 3 referências)". Se não houver, coloque "Sem histórico" e defina "semHistorico": true.
