@@ -65,6 +65,11 @@ export interface OrcamentoDados {
     // Narrative summary of what the client is asking for (3-5 sentences,
     // plain language) so the user can validate hours/rates against intent.
     contexto?: string
+    // Demand sub-category (canonical key: 'varejo' | 'edificacoes' |
+    // 'infraestrutura'). Auto-classified, user-editable. Used as a RIGID
+    // filter when picking the historical mold/envelope — same PRODUTO but
+    // different tipologia have very different economics.
+    tipologia?: string
   }
   escopo: string[]
   itens: OrcamentoItem[]

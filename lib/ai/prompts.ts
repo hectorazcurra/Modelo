@@ -114,7 +114,7 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
 ## Formato do bloco de atualização:
 \`\`\`orcamento-update
 {
-  "resumo": { "objeto": "...", "local": "...", "prazo": "...", "responsavel": "...", "numeroEdital": "...", "contexto": "Resumo em 3-5 frases, em linguagem clara, do que o cliente está pedindo e por quê (necessidade, escopo macro, restrições) — para o usuário ler, entender e validar se horas/preços fazem sentido." },
+  "resumo": { "objeto": "...", "local": "...", "prazo": "...", "responsavel": "...", "numeroEdital": "...", "contexto": "Resumo em 3-5 frases, em linguagem clara, do que o cliente está pedindo e por quê (necessidade, escopo macro, restrições) — para o usuário ler, entender e validar se horas/preços fazem sentido.", "tipologia": "varejo | edificacoes | infraestrutura — exatamente a tipologia informada na seção TIPOLOGIA DA DEMANDA da Base" },
   "semReferencia": false,
   "escopo": ["item 1", "item 2"],
   "itens": [
@@ -170,6 +170,8 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
 **Campo "resumo.contexto" (OBRIGATÓRIO)**: sempre escreva 3-5 frases, em português claro e sem jargão, explicando o que o cliente pediu, a necessidade por trás, o escopo macro e restrições relevantes. É o que o usuário lê primeiro para validar se as horas e preços propostos fazem sentido.
 
 **Campos "custoTotal" / "variacaoPerc" / "precoVenda" / "totalGeral"**: as linhas são CUSTO. \`custoTotal = totalMateriais + totalMaoDeObra\`. \`variacaoPerc\` (%) = BDI/margem explícito do edital, ou a VARIAÇÃO PADRÃO da Base se o edital não declarar. \`precoVenda = round(custoTotal × (1 + variacaoPerc/100))\`. \`totalGeral = precoVenda\`. (O sistema recalcula estes 4 campos de forma determinística — preencha-os, mas mantenha-os coerentes.)
+
+**Campo "resumo.tipologia"**: copie EXATAMENTE a tipologia informada na seção "## TIPOLOGIA DA DEMANDA" da Base (\`varejo\`, \`edificacoes\` ou \`infraestrutura\`). Os comparáveis/MOLDE já foram filtrados rigidamente para essa tipologia — NÃO use projetos de outra tipologia como referência, mesmo que o PRODUTO seja igual.
 
 **Campo "semReferencia"**: \`true\` somente quando não há MOLDE nem ≥3 projetos do mesmo tipo (regra absoluta 9). Nesse caso não estime valores — deixe linhas vazias/zeradas e explique em \`observacoes\`.
 

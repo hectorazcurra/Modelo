@@ -18,7 +18,7 @@ import * as path from 'node:path'
 import { generateText } from 'ai'
 import { extractTextFromFile } from '../lib/extractors/docs'
 import { buildSystemPrompt } from '../lib/ai/prompts'
-import { extractOrcamentoFromText, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, type HistoricoEnvelope } from '../lib/ai/analyzer'
+import { extractOrcamentoFromText, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, tipologiaBucket, normTipologia, type HistoricoEnvelope } from '../lib/ai/analyzer'
 import { getModel } from '../lib/ai/providers'
 import { readPricingWorkbook, extractDashboard, extractTarefas } from '../lib/excel/extractor'
 import { brl, excerpt } from '../lib/utils'
@@ -37,6 +37,7 @@ const projetoId = arg('--projeto')   // alternative: pull edital text from an ex
 const pricingPath = arg('--pricing')
 const provider = (arg('--provider') ?? 'claude') as AIProvider
 const outPath = arg('--out')
+const tipologiaFlag = arg('--tipologia') // override (varejo | edificacoes | infraestrutura)
 
 if ((!docsPath && !projetoId) || !pricingPath) {
   console.error('Uso: tsx scripts/test-orcamento.ts (--docs <pasta|arquivo> | --projeto <id>) --pricing <xlsx> [--provider claude] [--out file.json]')
@@ -106,13 +107,13 @@ function formatHistorico(b: { titulo: string; dados: unknown }): string {
 }
 
 // Mirrors formatMolde in app/api/chat/route.ts — keep in sync.
-function formatMolde(b: { titulo: string; dados: unknown }, bucketAlvo: string): string {
+function formatMolde(b: { titulo: string; dados: unknown }, bucketAlvo: string, tipologiaAlvo: string): string {
   const d = (b.dados ?? {}) as HistoricoDados
   const preco = d.dashboard?.precoVenda ?? d.valorOrcado ?? 0
   const prazo = d.dashboard?.prazoContrato ?? null
   const out: string[] = [
     `## MOLDE DE COMPOSIÇÃO (referência determinística — replique a ESTRUTURA, escale pelo prazo)`,
-    `${b.titulo} — tipo "${bucketAlvo}"${prazo ? ` | prazo ${prazo} meses` : ''}${preco ? ` | preço ${brl(preco)}` : ''}`,
+    `${b.titulo} — tipo "${bucketAlvo}" | tipologia "${tipologiaAlvo}"${prazo ? ` | prazo ${prazo} meses` : ''}${preco ? ` | preço ${brl(preco)}` : ''}`,
     `Este é o projeto histórico do MESMO TIPO mais representativo (preço mediano do bucket). Use a composição abaixo como TEMPLATE: replique as MESMAS funções/cargos e a MESMA proporção de horas entre eles, ajustando só a escala pelo prazo do projeto novo e por evidência explícita de porte no edital.`,
   ]
   const totCusto = (d.equipes ?? []).reduce((s, e) => s + (e.custoTotal ?? 0), 0)
@@ -178,6 +179,7 @@ async function main() {
   let baseTexto = ''
   let envelopeData: HistoricoEnvelope[] = []
   let variacaoSugerida: number | null = null
+  let tipologiaAlvo = ''
   try {
     const ids = await prisma.$queryRaw<{ id: string }[]>`
       SELECT id FROM BaseConhecimento
@@ -198,20 +200,25 @@ async function main() {
       .map((r) => ({ titulo: r.titulo, dados: typeof r.dados === 'string' ? safeParse(r.dados) : r.dados }))
     envelopeData = historicos.map((h) => {
       const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; valorOrcado?: number | null; margem?: number | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null; margemPerc?: number | null } }
-      return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null, margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null }
+      return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null, margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null, tipologia: d.tipologia ?? null }
     })
-    const bucketAlvo = serviceBucket(pdfTexto.slice(0, 600))
-    variacaoSugerida = medianMargem(envelopeData, bucketAlvo)
-    const moldeOs = pickMolde(envelopeData, bucketAlvo)
+    const sinalCurto = pdfTexto.slice(0, 600)
+    const bucketAlvo = serviceBucket(sinalCurto)
+    const tipologiaOverride = tipologiaFlag ? normTipologia(tipologiaFlag) : 'outro'
+    tipologiaAlvo =
+      tipologiaOverride !== 'outro' ? tipologiaOverride : tipologiaBucket(sinalCurto)
+    variacaoSugerida = medianMargem(envelopeData, bucketAlvo, tipologiaAlvo)
+    const moldeOs = pickMolde(envelopeData, bucketAlvo, tipologiaAlvo)
     const moldeEntry = moldeOs
       ? historicos.find((h) => (h.dados as HistoricoDados)?.os === moldeOs)
       : undefined
     baseTexto = [
-      ...(moldeEntry ? [formatMolde(moldeEntry, bucketAlvo)] : []),
+      `## TIPOLOGIA DA DEMANDA (filtro rígido)\nProjeto classificado como tipologia "${tipologiaAlvo}" (produto "${bucketAlvo}"). MOLDE e comparáveis filtrados SOMENTE para essa combinação. Ecoe em "resumo.tipologia".`,
+      ...(moldeEntry ? [formatMolde(moldeEntry, bucketAlvo, tipologiaAlvo)] : []),
       `### Projetos históricos da empresa (${historicos.length} projetos com dados)`,
       ...historicos.map(formatHistorico),
     ].join('\n\n')
-    console.log(`Base: ${historicos.length} projetos | molde=${moldeOs ?? 'nenhum'} (bucket=${bucketAlvo}) | ${baseTexto.length} chars`)
+    console.log(`Base: ${historicos.length} projetos | molde=${moldeOs ?? 'nenhum'} (bucket=${bucketAlvo} / tipologia=${tipologiaAlvo}) | ${baseTexto.length} chars`)
   } finally {
     await prisma.$disconnect()
   }
@@ -234,6 +241,9 @@ async function main() {
     console.log(text)
     process.exit(1)
   }
+  // Pin the effective tipologia onto the orçamento so the clamp filters by
+  // the same rigid tipologia used for the mold (mirror of chat route).
+  if (orcRaw.resumo) orcRaw.resumo.tipologia = tipologiaAlvo
   const { orc: orcClamped, applied: clampApplied } = clampToEnvelope(orcRaw, envelopeData)
   if (clampApplied) console.log('⚙️  Envelope clamp APLICADO (total da IA excedia a economia histórica)\n')
   const orc = recomputeTotais(orcClamped, variacaoSugerida)
@@ -258,6 +268,7 @@ async function main() {
   console.log('─'.repeat(78))
   const rows: [string, string, string, string][] = [
     ['Prazo', `${dash.prazoContrato ?? '?'} ${dash.prazoUnidade ?? 'm'}`, orc.resumo.prazo, ''],
+    ['Tipologia', 'n/d', tipologiaAlvo, ''],
     ['Preço Venda', fmt(dash.precoVenda), fmt(orc.precoVenda), pct(orc.precoVenda, dash.precoVenda ?? 0)],
     ['Custo MOD', fmt(dash.custoMaoDeObraDireta), fmt(orc.totalMaoDeObra), pct(orc.totalMaoDeObra, dash.custoMaoDeObraDireta ?? 0)],
     ['Custo Total', fmt(dash.custoTotal), fmt(orc.custoTotal), pct(orc.custoTotal, dash.custoTotal ?? 0)],

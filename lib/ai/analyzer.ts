@@ -29,6 +29,7 @@ export interface HistoricoEnvelope {
   precoVenda: number | null
   prazoMeses: number | null
   margemPerc: number | null   // markup over cost as a fraction (0.25 = 25%)
+  tipologia: string | null    // demand sub-category, e.g. "VAREJO", "EDIFICAÇÕES"
 }
 
 /**
@@ -40,9 +41,16 @@ export interface HistoricoEnvelope {
 export function medianMargem(
   items: HistoricoEnvelope[],
   bucketAlvo: string,
+  tipologiaAlvo: string,
 ): number | null {
   const ms = items
-    .filter((h) => serviceBucket(h.produto) === bucketAlvo && h.prazoMeses && h.prazoMeses >= 3)
+    .filter(
+      (h) =>
+        serviceBucket(h.produto) === bucketAlvo &&
+        normTipologia(h.tipologia) === tipologiaAlvo &&
+        h.prazoMeses &&
+        h.prazoMeses >= 3,
+    )
     .map((h) => h.margemPerc)
     .filter((m): m is number => Number.isFinite(m) && (m as number) > 0)
   const med = median(ms)
@@ -94,6 +102,52 @@ export function serviceBucket(s: string | null | undefined): string {
   return 'outro'
 }
 
+// ─── Tipologia de demanda ────────────────────────────────────────────────────
+// Sub-category that strongly changes the OS economics even when PRODUTO is the
+// same (e.g. gerenciamento VAREJO ≠ gerenciamento EDIFICAÇÕES). The historical
+// vocabulary is small and stable: VAREJO / EDIFICAÇÕES / INFRAESTRUTURA.
+//
+// normTipologia: map a raw historical value to a canonical key. Unknown → 'outro'
+// so it never satisfies a rigid match against the 3 valid targets.
+export function normTipologia(s: string | null | undefined): string {
+  const t = (s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+  if (!t) return 'outro'
+  if (/varejo|retail/.test(t)) return 'varejo'
+  if (/edifica/.test(t)) return 'edificacoes'
+  if (/infra/.test(t)) return 'infraestrutura'
+  return 'outro'
+}
+
+// Classify a NEW project (no FUP row) into a tipologia from a SHORT signal
+// (name + edital head). Rigid matching needs a definite answer, so this never
+// returns 'outro' — when nothing matches it defaults to 'edificacoes' (the
+// generic construction case); the user can override it on the orçamento.
+export function tipologiaBucket(s: string | null | undefined): string {
+  const t = (s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (/\bloja|lojas|varejo|retail|\bstore|\bpdv|ponto de venda|franquia|quiosque|flagship|magazine|filial comercial/.test(t))
+    return 'varejo'
+  if (/infraestrutura|rodovi|estrada|saneamento|esgoto|subestac|linha de transmissao|ferrovi|porto|aeroporto|\bduto|barragem|rede de (agua|esgoto|energia)/.test(t))
+    return 'infraestrutura'
+  if (/edifica|edificio|predio|galpao|fabrica|industri|\bsede\b|\bplanta\b|data center|centro de distribuicao|armazem|hospital|escritorio|corporativ|obra civil/.test(t))
+    return 'edificacoes'
+  return 'edificacoes'
+}
+
+// Effective tipologia of an orçamento: the user override stored in
+// resumo.tipologia wins; otherwise classify from the objeto/contexto.
+export function tipologiaAlvoDeOrc(orc: OrcamentoDados): string {
+  const ov = normTipologia((orc.resumo as { tipologia?: string })?.tipologia)
+  if (ov !== 'outro') return ov
+  return tipologiaBucket(`${orc.resumo?.objeto ?? ''} ${orc.resumo?.contexto ?? ''}`)
+}
+
 function parsePrazoMeses(prazo: string | undefined): number | null {
   if (!prazo) return null
   const m = String(prazo).match(/(\d+[.,]?\d*)\s*(m[eê]s|mes|meses|month)/i)
@@ -119,10 +173,12 @@ function median(xs: number[]): number | null {
 export function pickMolde(
   items: HistoricoEnvelope[],
   bucketAlvo: string,
+  tipologiaAlvo: string,
 ): string | null {
   const mesmoTipo = items.filter(
     (h) =>
       serviceBucket(h.produto) === bucketAlvo &&
+      normTipologia(h.tipologia) === tipologiaAlvo &&
       h.precoVenda &&
       h.prazoMeses &&
       h.prazoMeses >= 3,
@@ -156,8 +212,14 @@ export function clampToEnvelope(
   // Require prazo ≥ 3 months: shorter projects carry mobilization-heavy economics
   // that inflate price/month and are not representative of a sustained rate.
   const alvo = serviceBucket(orc.resumo?.objeto)
+  const tipAlvo = tipologiaAlvoDeOrc(orc)
   const mesmoTipo = historicos.filter(
-    (h) => serviceBucket(h.produto) === alvo && h.precoVenda && h.prazoMeses && h.prazoMeses >= 3,
+    (h) =>
+      serviceBucket(h.produto) === alvo &&
+      normTipologia(h.tipologia) === tipAlvo &&
+      h.precoVenda &&
+      h.prazoMeses &&
+      h.prazoMeses >= 3,
   )
   // Need a few comparables for a trustworthy median; otherwise don't clamp.
   if (mesmoTipo.length < 3) return { orc, applied: false, note: '' }
@@ -209,7 +271,7 @@ export function clampToEnvelope(
   const note =
     `\n\n[AJUSTE AUTOMÁTICO DE ENVELOPE] O total proposto (R$ ${Math.round(orc.totalGeral).toLocaleString('pt-BR')}) ` +
     `${dir}o envelope histórico (R$ ${Math.round(envelopePreco).toLocaleString('pt-BR')} = ` +
-    `mediana R$ ${Math.round(medMes).toLocaleString('pt-BR')}/mês de ${mesmoTipo.length} projetos "${alvo}" × ${prazoNovo} meses). ` +
+    `mediana R$ ${Math.round(medMes).toLocaleString('pt-BR')}/mês de ${mesmoTipo.length} projetos "${alvo}/${tipAlvo}" × ${prazoNovo} meses). ` +
     `Todas as linhas foram escaladas por ${(factor * 100).toFixed(0)}% para respeitar a economia real de projetos do mesmo tipo.`
 
   return {

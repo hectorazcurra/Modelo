@@ -3,7 +3,7 @@ import { streamText, convertToModelMessages } from 'ai'
 import { prisma } from '@/lib/db/client'
 import { getModel } from '@/lib/ai/providers'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
-import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, type HistoricoEnvelope } from '@/lib/ai/analyzer'
+import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, tipologiaBucket, normTipologia, type HistoricoEnvelope } from '@/lib/ai/analyzer'
 import { brl, excerpt } from '@/lib/utils'
 import type { AIProvider, OrcamentoDados, HistoricoDados } from '@/types'
 
@@ -159,17 +159,29 @@ export async function POST(request: NextRequest) {
         precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null,
         prazoMeses: d.dashboard?.prazoContrato ?? null,
         margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null,
+        tipologia: d.tipologia ?? null,
       }
     })
     // Classify from a SHORT signal (project name + edital head, where the
     // object/title lives) — not the whole multi-page text, which is noisy.
-    const bucketAlvo = serviceBucket(`${projeto.nome ?? ''} ${(projeto.pdfTexto ?? '').slice(0, 600)}`)
-    const moldeOs = pickMolde(envelopeData, bucketAlvo)
+    const sinalCurto = `${projeto.nome ?? ''} ${(projeto.pdfTexto ?? '').slice(0, 600)}`
+    const bucketAlvo = serviceBucket(sinalCurto)
+    // Tipologia is a RIGID filter for mold/envelope: same PRODUTO but
+    // different tipologia (VAREJO × EDIFICAÇÕES) have very different
+    // economics. Honor the user override stored on the current orçamento;
+    // otherwise auto-classify. The effective value is echoed back into
+    // resumo.tipologia so the UI can show/edit it.
+    const tipologiaOverride = normTipologia(
+      (projeto.orcamento?.dados as OrcamentoDados | null)?.resumo?.tipologia,
+    )
+    const tipologiaAlvo =
+      tipologiaOverride !== 'outro' ? tipologiaOverride : tipologiaBucket(sinalCurto)
+    const moldeOs = pickMolde(envelopeData, bucketAlvo, tipologiaAlvo)
     // Default markup (custo→preço) when the edital states no explicit
     // BDI/margem: median of same-type history. Fed to the model AND used as
     // the deterministic fallback in onFinish (the model can't reliably
     // multiply custo×(1+v) consistently).
-    const variacaoSugerida = medianMargem(envelopeData, bucketAlvo)
+    const variacaoSugerida = medianMargem(envelopeData, bucketAlvo, tipologiaAlvo)
 
     function formatMolde(b: { titulo: string; dados: unknown }): string {
       const d = (b.dados ?? {}) as HistoricoDados
@@ -177,7 +189,7 @@ export async function POST(request: NextRequest) {
       const prazo = d.dashboard?.prazoContrato ?? null
       const out: string[] = [
         `## MOLDE DE COMPOSIÇÃO (referência determinística — replique a ESTRUTURA, escale pelo prazo)`,
-        `${b.titulo} — tipo "${bucketAlvo}"${prazo ? ` | prazo ${prazo} meses` : ''}${preco ? ` | preço ${brl(preco)}` : ''}`,
+        `${b.titulo} — tipo "${bucketAlvo}" | tipologia "${tipologiaAlvo}"${prazo ? ` | prazo ${prazo} meses` : ''}${preco ? ` | preço ${brl(preco)}` : ''}`,
         `Este é o projeto histórico do MESMO TIPO mais representativo (preço mediano do bucket). Use a composição abaixo como TEMPLATE: replique as MESMAS funções/cargos e a MESMA proporção de horas entre eles, ajustando só a escala pelo prazo do projeto novo e por evidência explícita de porte no edital.`,
       ]
       const totCusto = (d.equipes ?? []).reduce((s, e) => s + (e.custoTotal ?? 0), 0)
@@ -206,7 +218,15 @@ export async function POST(request: NextRequest) {
           `${variacaoSugerida.toFixed(1)}% (mediana de margem dos projetos "${bucketAlvo}" do histórico).`
         : ''
 
+    const tipologiaTexto =
+      `## TIPOLOGIA DA DEMANDA (filtro rígido)\n` +
+      `Este projeto foi classificado como tipologia "${tipologiaAlvo}" (produto "${bucketAlvo}"). ` +
+      `O MOLDE e os comparáveis abaixo já foram filtrados SOMENTE para projetos do mesmo PRODUTO E mesma TIPOLOGIA — ` +
+      `pois a mesma categoria de serviço tem economia muito diferente entre VAREJO, EDIFICAÇÕES e INFRAESTRUTURA. ` +
+      `Não use projetos de outra tipologia como referência. Ecoe a tipologia detectada em "resumo.tipologia" (use exatamente: varejo | edificacoes | infraestrutura).`
+
     const baseTexto = [
+      tipologiaTexto,
       ...(variacaoTexto ? [variacaoTexto] : []),
       ...(moldeEntry ? [formatMolde(moldeEntry)] : []),
       ...(historicosFormatted.length > 0
@@ -257,6 +277,10 @@ export async function POST(request: NextRequest) {
 
         const orcamentoRaw = extractOrcamentoFromText(text)
         if (orcamentoRaw) {
+          // Pin the effective tipologia (override or auto) onto the orçamento
+          // so the clamp filters by the same rigid tipologia used for the
+          // mold, and the UI can show/edit it. Don't trust the model's echo.
+          if (orcamentoRaw.resumo) orcamentoRaw.resumo.tipologia = tipologiaAlvo
           // Deterministic envelope enforcement — the model cannot self-enforce
           // the cost cap reliably, so clamp against the real economics of the
           // historical projects (envelopeData built above, reused here).

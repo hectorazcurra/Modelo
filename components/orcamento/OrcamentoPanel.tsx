@@ -181,6 +181,14 @@ export function OrcamentoPanel({
     persistLine(recalcTotais({ ...localDados, variacaoPerc: perc }))
   }
 
+  // Edit the demand tipologia (rigid filter for mold/clamp). Persists into
+  // resumo.tipologia; the next AI generation reads it as the override and
+  // recomputes the mold/envelope from same-tipologia history.
+  function setTipologia(t: string) {
+    if (!localDados) return
+    persistLine({ ...localDados, resumo: { ...localDados.resumo, tipologia: t } })
+  }
+
   const pendingCount =
     localDados.itens.filter((i) => !i.status || i.status === 'pending').length +
     localDados.maoDeObra.filter((m) => !m.status || m.status === 'pending').length
@@ -257,6 +265,28 @@ export function OrcamentoPanel({
             <p className="text-sm text-[#A3A3A3] leading-relaxed">
               {localDados.resumo.contexto}
             </p>
+          </div>
+        )}
+
+        {/* Tipologia da demanda — filtro rígido p/ molde/envelope */}
+        {(localDados.resumo.tipologia || localDados.resumo.objeto) && (
+          <div className="rounded-xl border border-[#2A2A2A] bg-[#141414] p-4">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider mb-1">
+                  Tipologia da demanda
+                </div>
+                <p className="text-[11px] text-[#666666] leading-relaxed">
+                  Filtra os comparáveis (molde, envelope, variação) por sub-categoria.
+                  Alterar aqui só recalcula na próxima geração do orçamento — peça à IA para refazer.
+                </p>
+              </div>
+              <TipologiaEditor
+                value={localDados.resumo.tipologia ?? ''}
+                disabled={saving}
+                onCommit={setTipologia}
+              />
+            </div>
           </div>
         )}
 
@@ -852,6 +882,42 @@ function VariacaoEditor({
       />
       <span className="text-[#666666] text-sm">%</span>
     </span>
+  )
+}
+
+// Demand sub-category selector. 3 fixed values matching the canonical keys
+// the analyzer uses (normTipologia). Persisting it changes the rigid filter
+// applied on the NEXT AI generation — the panel shows that hint inline.
+function TipologiaEditor({
+  value,
+  disabled,
+  onCommit,
+}: {
+  value: string
+  disabled?: boolean
+  onCommit: (t: string) => void
+}) {
+  const opts: Array<{ k: string; label: string }> = [
+    { k: 'varejo', label: 'Varejo' },
+    { k: 'edificacoes', label: 'Edificações' },
+    { k: 'infraestrutura', label: 'Infraestrutura' },
+  ]
+  return (
+    <select
+      value={value || ''}
+      disabled={disabled}
+      onChange={(e) => onCommit(e.target.value)}
+      className="bg-[#0A0A0A] border border-[#2A2A2A] hover:border-amber-500/40 rounded px-2 py-1 text-xs text-amber-400 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+    >
+      <option value="" disabled>
+        Selecione…
+      </option>
+      {opts.map((o) => (
+        <option key={o.k} value={o.k}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   )
 }
 
