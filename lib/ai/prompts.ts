@@ -69,14 +69,19 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
 
 ### Passo 4 — Decomposição: FORMA do MOLDE × MAGNITUDE do envelope
 
-1. Do MOLDE, extraia a participação % de cada cargo/função no custo total dele e a intensidade FTE de cada um.
-2. Aplique essas % sobre o **ENVELOPE_CUSTO** (Passo 3, magnitude do tipo) — NÃO sobre o custo absoluto do MOLDE: \`total_funcao = ENVELOPE_CUSTO × participacao%_do_MOLDE\`.
-3. Derive os campos do JSON:
-   - \`valorDia\` = tarifa diária da função (custoPorHH do MOLDE × 8)
-   - \`qtd\` = nº de pessoas inteiro (espelhe a intensidade do MOLDE)
-   - \`dias\` = \`total_funcao / (qtd × valorDia)\`
+⚠️ **Uma linha de \`maoDeObra\` = UM profissional individual** (cargo + senioridade), NUNCA um agregado de equipe. O MOLDE lista as equipes e os profissionais que as compõem (Coord., Eng/Arq Sr., Pl., Jr., Aux. Téc., etc.) — replique cada um como uma linha separada, usando o campo \`equipe\` para indicar a qual time ele pertence. NÃO emita "Gerenciamento de Obra: 800h" como uma única linha; emita "Coord. Obra: 480h", "Eng Sr.: 320h", etc., todas com \`equipe: "Gerenciamento de Obra"\`.
+
+1. Do MOLDE, extraia a participação % de **cada profissional individual** (não da equipe inteira) no custo total dele e a intensidade FTE de cada um. Use o bloco "· Cargo: Xh | R$ Y" listado embaixo de cada equipe no MOLDE.
+2. Aplique essas % sobre o **ENVELOPE_CUSTO** (Passo 3, magnitude do tipo) — NÃO sobre o custo absoluto do MOLDE: \`total_profissional = ENVELOPE_CUSTO × participacao%_do_profissional_no_MOLDE\`.
+3. Derive os campos do JSON, **uma linha por profissional**:
+   - \`funcao\` = cargo + senioridade exatamente como no MOLDE (ex.: "Eng. Sr.", "Eng. Pl.", "Coord. Obra")
+   - \`equipe\` = nome do time ao qual o profissional pertence no MOLDE (ex.: "Gerenciamento de Obra")
+   - \`valorDia\` = tarifa diária do cargo (custoPorHH do MOLDE × 8)
+   - \`qtd\` = nº de pessoas inteiro nesse cargo (1, 2, 3…)
+   - \`dias\` = \`total_profissional / (qtd × valorDia)\`
    - **\`dias\` NUNCA pode exceder \`prazo_servico_meses × 22\`** (12 meses → máx 264). Se exceder, aumente \`qtd\`.
 4. Mantenha a MESMA intensidade de alocação (FTE) do MOLDE: a proporção entre cargos vem do MOLDE; o tamanho total vem do ENVELOPE.
+5. Se a equipe do MOLDE tinha 5 profissionais distintos, sua \`maoDeObra\` precisa ter 5 linhas (ou mais, se houver várias equipes) — não consolide cargos diferentes na mesma linha.
 
 **🛑 Gate de validação INVIOLÁVEL (exiba em texto antes do JSON):**
 
@@ -139,7 +144,8 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
   "areaTotal": 0,
   "maoDeObra": [
     {
-      "funcao": "Engenheiro Residente",
+      "funcao": "Coord. Obra",
+      "equipe": "Gerenciamento de Obra",
       "qtd": 1,
       "dias": 90,
       "valorDia": 0,
@@ -147,10 +153,30 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
       "fonte": "OS XXXX - CLIENTE (mediana de 3 referências)",
       "fonteOs": "XXXX",
       "referencias": [
-        { "os": "2026-013", "equipe": "Equipe01", "valorHora": 154.74, "totalHH": 1992, "cliente": "SCALA" },
-        { "os": "2026-018", "equipe": "Equipe01", "valorHora": 165.00, "totalHH": 2100, "cliente": "RIACHUELO" },
-        { "os": "2026-026", "equipe": "Equipe01", "valorHora": 142.00, "totalHH": 1800, "cliente": "TOOLS" }
+        { "os": "2026-013", "equipe": "Equipe01", "valorHora": 154.74, "totalHH": 1992, "cliente": "SCALA" }
       ],
+      "semHistorico": false
+    },
+    {
+      "funcao": "Eng. Sr.",
+      "equipe": "Gerenciamento de Obra",
+      "qtd": 1,
+      "dias": 60,
+      "valorDia": 0,
+      "total": 0,
+      "fonte": "OS XXXX - CLIENTE",
+      "fonteOs": "XXXX",
+      "semHistorico": false
+    },
+    {
+      "funcao": "Eng. Pl.",
+      "equipe": "Gerenciamento de Obra",
+      "qtd": 2,
+      "dias": 45,
+      "valorDia": 0,
+      "total": 0,
+      "fonte": "OS XXXX - CLIENTE",
+      "fonteOs": "XXXX",
       "semHistorico": false
     }
   ],

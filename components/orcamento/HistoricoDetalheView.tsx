@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, Fragment } from 'react'
+import Link from 'next/link'
 import { ExternalLink, ChevronRight, ChevronDown } from 'lucide-react'
 import { brl, excerpt } from '@/lib/utils'
 import type { HistoricoDados } from '@/types'
@@ -214,7 +215,7 @@ export function HistoricoDetalheView({ os, dados: d, mode }: HistoricoDetalheVie
 
       {mode === 'modal' && (
         <div className="pt-2">
-          <a
+          <Link
             href={`/projetos-historicos/${encodeURIComponent(os)}`}
             target="_blank"
             rel="noopener noreferrer"
@@ -222,7 +223,7 @@ export function HistoricoDetalheView({ os, dados: d, mode }: HistoricoDetalheVie
           >
             Ver projeto completo
             <ExternalLink className="w-3 h-3" />
-          </a>
+          </Link>
         </div>
       )}
     </div>

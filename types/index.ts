@@ -36,7 +36,12 @@ export interface OrcamentoItem {
 }
 
 export interface MaoDeObra {
-  funcao: string
+  funcao: string              // ONE professional/cargo (e.g. "Eng. Sr.", "Coord. Obra")
+  // Team this professional belongs to (e.g. "Gerenciamento de Obra"). Used by
+  // the UI to group rows under team sub-headers and by the AI to mirror the
+  // mold's team/professional structure. Optional for backward compatibility
+  // with older orçamentos that emitted one row per macro-function.
+  equipe?: string
   qtd: number
   dias: number
   valorDia: number

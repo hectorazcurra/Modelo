@@ -152,13 +152,14 @@ export function OrcamentoPanel({
   }
 
   // #4 — add a manual labor line (description + hours + R$/hour)
-  function addMdo(funcao: string, hh: number, rate: number) {
+  function addMdo(funcao: string, hh: number, rate: number, equipe?: string) {
     if (!localDados) return
     const total = hh * rate
     // Schema stays qtd×dias×valorDia: qtd=1, dias=hh/8 (working days),
     // valorDia=rate×8 → product = hh×rate.
     const novo: MaoDeObra = {
       funcao,
+      ...(equipe ? { equipe } : {}),
       qtd: 1,
       dias: hh / 8,
       valorDia: rate * 8,
@@ -416,21 +417,46 @@ export function OrcamentoPanel({
         {/* Mão de obra — sempre visível para permitir inserção manual */}
         {(localDados.maoDeObra.length > 0 || localDados.semReferencia) && (
           <Section title="Mão de Obra" icon={<Users className="w-4 h-4" />} defaultOpen>
-            <div className="space-y-0.5">
-              {localDados.maoDeObra.map((item, i) => {
-                const isEditing = editingLine?.type === 'mdo' && editingLine.idx === i
+            <div className="space-y-3">
+              {groupByEquipe(localDados.maoDeObra).map(([equipe, rows], gi) => {
+                const eqIdxs = localDados.maoDeObra
+                  .map((m, i) => ((m.equipe ?? '').trim() === equipe ? i : -1))
+                  .filter((i) => i >= 0)
+                const subtotal = rows.reduce((s, r) => s + (r.total || 0), 0)
                 return (
-                  <MdoLine
-                    key={i}
-                    item={item}
-                    isEditing={isEditing}
-                    disabled={saving}
-                    onAccept={() => acceptMdo(i)}
-                    onStartEdit={() => setEditingLine({ type: 'mdo', idx: i })}
-                    onCancelEdit={() => setEditingLine(null)}
-                    onConfirmEdit={(upd) => editMdo(i, upd)}
-                    onOpenModal={setModalOs}
-                  />
+                  <div key={equipe || `_${gi}`}>
+                    {equipe && (
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider">
+                          {equipe}
+                          <span className="ml-1.5 text-[10px] text-[#666666] normal-case">
+                            ({rows.length} {rows.length === 1 ? 'profissional' : 'profissionais'})
+                          </span>
+                        </div>
+                        <span className="text-[11px] text-[#A3A3A3]">{formatCurrency(subtotal)}</span>
+                      </div>
+                    )}
+                    <div className="space-y-0.5">
+                      {rows.map((item, localIdx) => {
+                        const globalIdx = eqIdxs[localIdx]
+                        const isEditing =
+                          editingLine?.type === 'mdo' && editingLine.idx === globalIdx
+                        return (
+                          <MdoLine
+                            key={localIdx}
+                            item={item}
+                            isEditing={isEditing}
+                            disabled={saving}
+                            onAccept={() => acceptMdo(globalIdx)}
+                            onStartEdit={() => setEditingLine({ type: 'mdo', idx: globalIdx })}
+                            onCancelEdit={() => setEditingLine(null)}
+                            onConfirmEdit={(upd) => editMdo(globalIdx, upd)}
+                            onOpenModal={setModalOs}
+                          />
+                        )
+                      })}
+                    </div>
+                  </div>
                 )
               })}
 
@@ -750,9 +776,10 @@ function AddMdoForm({
   onAdd,
 }: {
   disabled: boolean
-  onAdd: (funcao: string, hh: number, rate: number) => void
+  onAdd: (funcao: string, hh: number, rate: number, equipe?: string) => void
 }) {
   const [open, setOpen] = useState(false)
+  const [equipe, setEquipe] = useState('')
   const [funcao, setFuncao] = useState('')
   const [hh, setHH] = useState<number | ''>('')
   const [rate, setRate] = useState<number | ''>('')
@@ -761,8 +788,8 @@ function AddMdoForm({
 
   function submit() {
     if (!valid) return
-    onAdd(funcao.trim(), Number(hh), Number(rate))
-    setFuncao(''); setHH(''); setRate(''); setOpen(false)
+    onAdd(funcao.trim(), Number(hh), Number(rate), equipe.trim() || undefined)
+    setEquipe(''); setFuncao(''); setHH(''); setRate(''); setOpen(false)
   }
 
   if (!open) {
@@ -780,10 +807,16 @@ function AddMdoForm({
   return (
     <div className="mt-1 rounded-lg border border-[#2A2A2A] bg-[#0F0F0F] p-2 space-y-1.5">
       <input
+        value={equipe}
+        onChange={(e) => setEquipe(e.target.value)}
+        placeholder="Equipe (opcional) — ex.: Gerenciamento de Obra"
+        className="w-full text-xs bg-[#0A0A0A] border border-[#333] rounded px-2 py-1 focus:outline-none focus:border-amber-500/50 text-[#A3A3A3]"
+      />
+      <input
         autoFocus
         value={funcao}
         onChange={(e) => setFuncao(e.target.value)}
-        placeholder="Descrição da função / serviço"
+        placeholder="Cargo / profissional — ex.: Eng. Sr."
         className="w-full text-xs bg-[#0A0A0A] border border-[#333] rounded px-2 py-1 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
       />
       <div className="flex items-center gap-1 text-xs text-[#666666]">
@@ -992,6 +1025,18 @@ function groupByCategory(itens: OrcamentoItem[]): [string, OrcamentoItem[]][] {
   for (const item of itens) {
     if (!map.has(item.categoria)) map.set(item.categoria, [])
     map.get(item.categoria)!.push(item)
+  }
+  return Array.from(map.entries())
+}
+
+// Group maoDeObra by team. Rows without `equipe` (legacy/manual entries) are
+// collected under an empty key so the UI can render them without a sub-header.
+function groupByEquipe(mdo: MaoDeObra[]): [string, MaoDeObra[]][] {
+  const map = new Map<string, MaoDeObra[]>()
+  for (const m of mdo) {
+    const k = (m.equipe ?? '').trim()
+    if (!map.has(k)) map.set(k, [])
+    map.get(k)!.push(m)
   }
   return Array.from(map.entries())
 }
