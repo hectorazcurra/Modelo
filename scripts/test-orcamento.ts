@@ -199,8 +199,9 @@ async function main() {
       .slice(0, 30)
       .map((r) => ({ titulo: r.titulo, dados: typeof r.dados === 'string' ? safeParse(r.dados) : r.dados }))
     envelopeData = historicos.map((h) => {
-      const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; valorOrcado?: number | null; margem?: number | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null; margemPerc?: number | null } }
-      return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null, margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null, tipologia: d.tipologia ?? null }
+      const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; valorOrcado?: number | null; margem?: number | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null; margemPerc?: number | null }; equipes?: Array<{ profissionais?: unknown[] }> }
+      const riqueza = (d.equipes ?? []).reduce((s, e) => s + (e.profissionais?.length ?? 0), 0)
+      return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null, margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null, tipologia: d.tipologia ?? null, riqueza }
     })
     const sinalCurto = pdfTexto.slice(0, 600)
     const bucketAlvo = serviceBucket(sinalCurto)

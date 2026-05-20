@@ -30,6 +30,11 @@ export interface HistoricoEnvelope {
   prazoMeses: number | null
   margemPerc: number | null   // markup over cost as a fraction (0.25 = 25%)
   tipologia: string | null    // demand sub-category, e.g. "VAREJO", "EDIFICAÇÕES"
+  // Total professionals across all teams. Used by pickMolde to prefer molds
+  // with a real per-cargo breakdown (Sr/Pl/Jr) — without it, the AI is forced
+  // to emit a single aggregate line per team and the user can't see the
+  // seniority composition.
+  riqueza: number
 }
 
 /**
@@ -184,7 +189,11 @@ export function pickMolde(
       h.prazoMeses >= 3,
   )
   if (mesmoTipo.length === 0) return null
-  const sorted = [...mesmoTipo].sort(
+  // Prefer molds with a real per-cargo breakdown (≥2 profissionais) so the AI
+  // can mirror Sr/Pl/Jr distinctions. Fall back to all if none qualifies.
+  const ricos = mesmoTipo.filter((h) => (h.riqueza ?? 0) >= 2)
+  const pool = ricos.length > 0 ? ricos : mesmoTipo
+  const sorted = [...pool].sort(
     (a, b) => (a.precoVenda as number) - (b.precoVenda as number),
   )
   // Lower-median index: representative, never the largest.

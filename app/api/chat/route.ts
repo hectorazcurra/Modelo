@@ -160,6 +160,10 @@ export async function POST(request: NextRequest) {
         prazoMeses: d.dashboard?.prazoContrato ?? null,
         margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null,
         tipologia: d.tipologia ?? null,
+        riqueza: (d.equipes ?? []).reduce(
+          (s: number, e: { profissionais?: unknown[] }) => s + (e.profissionais?.length ?? 0),
+          0,
+        ),
       }
     })
     // Classify from a SHORT signal (project name + edital head, where the

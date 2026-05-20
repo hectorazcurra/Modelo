@@ -423,6 +423,8 @@ export function OrcamentoPanel({
                   .map((m, i) => ((m.equipe ?? '').trim() === equipe ? i : -1))
                   .filter((i) => i >= 0)
                 const subtotal = rows.reduce((s, r) => s + (r.total || 0), 0)
+                const pessoas = rows.reduce((s, r) => s + (r.qtd || 0), 0)
+                const cargos = rows.length
                 return (
                   <div key={equipe || `_${gi}`}>
                     {equipe && (
@@ -430,7 +432,8 @@ export function OrcamentoPanel({
                         <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider">
                           {equipe}
                           <span className="ml-1.5 text-[10px] text-[#666666] normal-case">
-                            ({rows.length} {rows.length === 1 ? 'profissional' : 'profissionais'})
+                            ({cargos} {cargos === 1 ? 'cargo' : 'cargos'}
+                            {pessoas !== cargos ? ` · ${pessoas} pessoas` : ''})
                           </span>
                         </div>
                         <span className="text-[11px] text-[#A3A3A3]">{formatCurrency(subtotal)}</span>
@@ -652,22 +655,27 @@ function MdoLine({
 }: MdoLineProps) {
   // Hours-centric: the user thinks in total hours (HH) and R$/hour, matching
   // the historical data. Schema stays qtd×dias×valorDia (8h/day jornada).
+  const curQtd = item.qtd || 1
   const curHH = Math.round((item.qtd || 0) * (item.dias || 0) * 8 * 100) / 100
   const curRate = curHH > 0 ? Math.round((item.total / curHH) * 100) / 100 : 0
+  const [qty, setQty] = useState(curQtd)
   const [hh, setHH] = useState(curHH)
   const [rate, setRate] = useState(curRate)
 
   useEffect(() => {
+    setQty(curQtd)
     setHH(curHH)
     setRate(curRate)
-  }, [curHH, curRate])
+  }, [curQtd, curHH, curRate])
 
   const status = item.status ?? 'pending'
   const isConfirmed = status === 'accepted' || status === 'edited'
 
   function confirm() {
-    // Persist back into schema: qtd=1, dias=HH/8, valorDia=rate×8 → total=HH×rate
-    onConfirmEdit({ qtd: 1, dias: hh / 8, valorDia: rate * 8 })
+    // Persist back into schema: dias = HH_total / (qtd × 8); valorDia = rate × 8
+    // → total = qtd × dias × valorDia = HH × rate (qtd preserved for headcount).
+    const safeQty = qty > 0 ? qty : 1
+    onConfirmEdit({ qtd: safeQty, dias: hh / (safeQty * 8), valorDia: rate * 8 })
   }
 
   return (
@@ -683,6 +691,11 @@ function MdoLine({
           }`}
         >
           {item.semHistorico && '⚠️ '}
+          {item.qtd > 1 && (
+            <span className="inline-flex items-center justify-center min-w-[1.25rem] px-1 mr-1 rounded text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 align-middle">
+              {item.qtd}×
+            </span>
+          )}
           {item.funcao}
         </span>
 
@@ -690,9 +703,18 @@ function MdoLine({
           <div className="flex items-center gap-1 flex-shrink-0 text-[#666666]">
             <input
               type="number"
+              min="1"
+              value={qty}
+              onChange={(e) => setQty(parseInt(e.target.value, 10) || 1)}
+              title="Quantidade de pessoas neste cargo"
+              className="w-10 text-center bg-[#0A0A0A] border border-[#333] rounded px-1 py-0.5 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
+            />
+            <span>×</span>
+            <input
+              type="number"
               value={hh}
               onChange={(e) => setHH(parseFloat(e.target.value) || 0)}
-              title="Total de horas"
+              title="Total de horas (somando todas as pessoas)"
               className="w-14 text-center bg-[#0A0A0A] border border-[#333] rounded px-1 py-0.5 focus:outline-none focus:border-amber-500/50 text-[#FAFAFA]"
             />
             <span>h ×</span>
