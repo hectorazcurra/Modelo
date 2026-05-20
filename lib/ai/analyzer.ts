@@ -1,4 +1,4 @@
-import type { OrcamentoDados } from '@/types'
+import type { OrcamentoDados, BdiOrcamento } from '@/types'
 
 const ORC_UPDATE_REGEX = /```orcamento-update\n([\s\S]*?)```/
 
@@ -35,6 +35,13 @@ export interface HistoricoEnvelope {
   // to emit a single aggregate line per team and the user can't see the
   // seniority composition.
   riqueza: number
+  // Modalidade contratual extraída de DASHBOARD A24 do Pricing histórico
+  // (Empreitada ou Administração). Usado por medianBdiByModalidade.
+  modalidade: 'empreitada' | 'administracao' | null
+  // Componentes do BDI extraídos do mesmo Pricing — fração 0..1 (como na
+  // planilha). Quando ausentes, medianBdiByModalidade ignora o registro.
+  margemComponentes: Array<{ label: string; valor: number }> | null
+  impostosComponentes: Array<{ label: string; valor: number }> | null
 }
 
 /**
@@ -62,23 +69,142 @@ export function medianMargem(
   return med == null ? null : Math.round(med * 1000) / 10 // fraction → percent
 }
 
+// ─── BDI estruturado: fórmula Excel + classificador + mediana por modalidade ──
+
+/**
+ * Apply the modalidade-specific BDI formula from the Metodo Pricing template.
+ * Inputs are PERCENTs (11 = 11%); output is PERCENT.
+ *   Empreitada:    1 / (1 − Margem − Impostos) − 1   (markup-over-cost)
+ *   Administração: (1 + Margem) / (1 − Impostos) − 1
+ * Mirror of cells D35/D48 in DASHBOARD; the panel re-runs this on every edit.
+ */
+export function computeBdi(b: BdiOrcamento): number {
+  const M = b.margemComponentes.reduce((s, c) => s + (Number.isFinite(c.valor) ? c.valor : 0), 0) / 100
+  const I = b.impostosComponentes.reduce((s, c) => s + (Number.isFinite(c.valor) ? c.valor : 0), 0) / 100
+  let frac = 0
+  if (b.modalidade === 'empreitada') {
+    if (M + I >= 0.999) return 0
+    frac = 1 / (1 - M - I) - 1
+  } else {
+    if (I >= 0.999) return 0
+    frac = (1 + M) / (1 - I) - 1
+  }
+  return Math.round(frac * 10000) / 100  // percent, 2 casas
+}
+
+/**
+ * Classify a NEW project text into Empreitada vs Administração. Per business
+ * rule: "Execução de Obra" (the contractor does the actual construction) →
+ * Administração; everything else (gerenciamento, fiscalização, projeto…) →
+ * Empreitada. Feed a SHORT signal (name + edital head).
+ */
+export function modalidadeBucket(s: string | null | undefined): 'empreitada' | 'administracao' {
+  const t = (s ?? '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+  if (/execucao de obra|executar a obra|obra executada|reforma com mao de obra|construcao da obra|construir a obra|obra propria/.test(t))
+    return 'administracao'
+  return 'empreitada'
+}
+
+/**
+ * Effective modalidade of an orçamento: user override stored in resumo.modalidade
+ * wins; otherwise classify from the objeto/contexto/título.
+ */
+export function modalidadeAlvoDeOrc(orc: OrcamentoDados): 'empreitada' | 'administracao' {
+  const ov = String((orc.resumo as { modalidade?: string })?.modalidade ?? '').toLowerCase()
+  if (ov === 'empreitada' || ov === 'administracao') return ov
+  return modalidadeBucket(`${orc.resumo?.objeto ?? ''} ${orc.resumo?.contexto ?? ''}`)
+}
+
+/**
+ * Median BDI by modalidade — returns a fully-formed BdiOrcamento with each
+ * component (Lucro/Taxa Admin, Overhead, …, PIS, COFINS, …) replaced by the
+ * median of same-bucket / same-tipologia / same-modalidade history. Values
+ * stored as PERCENT (UI-ready). Returns null when fewer than 2 comparables —
+ * caller can then fall back to medianMargem (single-number) for stability.
+ */
+export function medianBdiByModalidade(
+  items: HistoricoEnvelope[],
+  bucketAlvo: string,
+  tipologiaAlvo: string,
+  modalidade: 'empreitada' | 'administracao',
+): BdiOrcamento | null {
+  const compatibles = items.filter(
+    (h) =>
+      serviceBucket(h.produto) === bucketAlvo &&
+      normTipologia(h.tipologia) === tipologiaAlvo &&
+      h.modalidade === modalidade &&
+      h.margemComponentes &&
+      h.impostosComponentes,
+  )
+  if (compatibles.length < 2) return null
+  // Aggregate by label position — assume the 4-row Margem and 3-4-row Impostos
+  // schema of the Metodo Pricing template is stable across projects of the
+  // same type (validated by diagnose-cargos).
+  function medianByIndex(arrs: Array<Array<{ label: string; valor: number }>>, len: number) {
+    const out: Array<{ label: string; valor: number }> = []
+    for (let i = 0; i < len; i++) {
+      const vals = arrs.map((a) => a[i]?.valor).filter((v): v is number => Number.isFinite(v))
+      const med = median(vals) ?? 0
+      const label =
+        arrs.map((a) => a[i]?.label).find((s): s is string => !!s) ?? `Componente ${i + 1}`
+      out.push({ label, valor: Math.round(med * 10000) / 100 }) // fraction → percent
+    }
+    return out
+  }
+  const margemLen = Math.max(...compatibles.map((h) => h.margemComponentes!.length))
+  const impostosLen = Math.max(...compatibles.map((h) => h.impostosComponentes!.length))
+  const margemComponentes = medianByIndex(
+    compatibles.map((h) => h.margemComponentes!),
+    margemLen,
+  )
+  const impostosComponentes = medianByIndex(
+    compatibles.map((h) => h.impostosComponentes!),
+    impostosLen,
+  )
+  const bdi: BdiOrcamento = {
+    modalidade,
+    margemComponentes,
+    impostosComponentes,
+    bdiCalculado: 0,
+  }
+  bdi.bdiCalculado = computeBdi(bdi)
+  return bdi
+}
+
 /**
  * Deterministically derive the cost→price split. Line totals are CUSTO; the
  * client price is custoTotal × (1 + variacaoPerc/100). The model cannot
  * reliably do this arithmetic, so both the chat route and the harness call
  * this as the source of truth before persisting. totalGeral is kept = the
  * client price so the envelope clamp (priced in client terms) keeps working.
+ *
+ * When `orc.bdi` (structured) is present, `variacaoPerc` is RECOMPUTED from it
+ * via `computeBdi` — the structured form is the source of truth and the flat
+ * % is kept only for back-compat. When `orc.bdi` is absent, the legacy single
+ * variacaoPerc path applies (orc value > fallback > 0).
  */
 export function recomputeTotais(
   orc: OrcamentoDados,
-  fallbackVarPerc: number | null,
+  fallback: number | BdiOrcamento | null,
 ): OrcamentoDados {
   const totalMateriais = (orc.itens ?? []).reduce((s, i) => s + (i.total || 0), 0)
   const totalMaoDeObra = (orc.maoDeObra ?? []).reduce((s, m) => s + (m.total || 0), 0)
   const custoTotal = totalMateriais + totalMaoDeObra
-  const v = orc.variacaoPerc
-  const variacaoPerc =
-    Number.isFinite(v) && (v as number) > 0 ? (v as number) : fallbackVarPerc ?? 0
+
+  let bdi = orc.bdi
+  if (!bdi && fallback && typeof fallback === 'object') bdi = fallback
+  let variacaoPerc: number
+  if (bdi) {
+    bdi = { ...bdi, bdiCalculado: computeBdi(bdi) }
+    variacaoPerc = bdi.bdiCalculado
+  } else {
+    const v = orc.variacaoPerc
+    const fb = typeof fallback === 'number' ? fallback : null
+    variacaoPerc = Number.isFinite(v) && (v as number) > 0 ? (v as number) : fb ?? 0
+  }
   const precoVenda = Math.round(custoTotal * (1 + variacaoPerc / 100))
   return {
     ...orc,
@@ -86,6 +212,7 @@ export function recomputeTotais(
     totalMaoDeObra,
     custoTotal,
     variacaoPerc,
+    ...(bdi ? { bdi } : {}),
     precoVenda,
     totalGeral: precoVenda,
   }

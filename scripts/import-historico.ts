@@ -9,11 +9,13 @@ import {
   extractDashboard,
   extractPPU,
   extractTarefas,
+  extractSuprimentos,
   extractWorkbookText,
   extractAreaM2,
   type DashboardData,
   type PPUData,
   type EquipeTarefa,
+  type SuprimentosBloco,
 } from '../lib/excel/extractor'
 import { extractDocRecFolder, type DocRecExtraction } from '../lib/extractors/docs'
 
@@ -56,6 +58,7 @@ interface ImportRecord {
   dashboard: DashboardData | null
   ppu: PPUData | null
   equipes: EquipeTarefa[] | null
+  suprimentosTotais: SuprimentosBloco | null
   // Per-folder extractions
   docRec: FolderSection | null
   suprimentos: FolderSection | null
@@ -314,7 +317,7 @@ async function extractOutrosOrcamento(revPath: string): Promise<FolderSection | 
 async function processProject(baseDir: string, proj: IndexProjeto): Promise<ImportRecord> {
   const rec: ImportRecord = {
     csv: proj, pasta: null, arquivoXlsx: null, revisao: null,
-    dashboard: null, ppu: null, equipes: null,
+    dashboard: null, ppu: null, equipes: null, suprimentosTotais: null,
     docRec: null, suprimentos: null, engenharia: null, propostas: null, outrosOrcamento: null,
     areaM2: null, erro: null,
   }
@@ -362,6 +365,7 @@ async function processProject(baseDir: string, proj: IndexProjeto): Promise<Impo
         rec.dashboard = extractDashboard(wb)
         rec.ppu = extractPPU(wb)
         rec.equipes = extractTarefas(wb)
+        rec.suprimentosTotais = extractSuprimentos(wb)
       } catch (err) {
         rec.erro = `Erro ao ler Pricing: ${err instanceof Error ? err.message : String(err)}`
       }
@@ -418,6 +422,9 @@ function buildDados(rec: ImportRecord) {
     despesasOperacionais: ppu?.despesasOperacionais ?? null,
     maoDeObraCategoria: ppu?.maoDeObra ?? null,
     equipes: equipes ?? null,
+    // Structured material totals from Tarefas (separate from the folder text
+    // section "suprimentos" below — same name historically, different shape).
+    suprimentosTotais: rec.suprimentosTotais ?? null,
 
     // Per-folder extracted text
     cartaConvite:    sectionToDados(rec.docRec),

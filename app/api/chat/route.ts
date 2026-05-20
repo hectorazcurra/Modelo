@@ -3,7 +3,7 @@ import { streamText, convertToModelMessages } from 'ai'
 import { prisma } from '@/lib/db/client'
 import { getModel } from '@/lib/ai/providers'
 import { buildSystemPrompt } from '@/lib/ai/prompts'
-import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, tipologiaBucket, normTipologia, type HistoricoEnvelope } from '@/lib/ai/analyzer'
+import { extractOrcamentoFromText, stripOrcamentoBlock, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, tipologiaBucket, normTipologia, modalidadeBucket, medianBdiByModalidade, type HistoricoEnvelope } from '@/lib/ai/analyzer'
 import { brl, excerpt } from '@/lib/utils'
 import type { AIProvider, OrcamentoDados, HistoricoDados } from '@/types'
 
@@ -164,6 +164,11 @@ export async function POST(request: NextRequest) {
           (s: number, e: { profissionais?: unknown[] }) => s + (e.profissionais?.length ?? 0),
           0,
         ),
+        modalidade: (d.dashboard as { modalidade?: 'empreitada' | 'administracao' | null })?.modalidade ?? null,
+        margemComponentes:
+          (d.dashboard as { bdiBlock?: { margemComponentes?: Array<{ label: string; valor: number }> } })?.bdiBlock?.margemComponentes ?? null,
+        impostosComponentes:
+          (d.dashboard as { bdiBlock?: { impostosComponentes?: Array<{ label: string; valor: number }> } })?.bdiBlock?.impostosComponentes ?? null,
       }
     })
     // Classify from a SHORT signal (project name + edital head, where the
@@ -181,10 +186,21 @@ export async function POST(request: NextRequest) {
     const tipologiaAlvo =
       tipologiaOverride !== 'outro' ? tipologiaOverride : tipologiaBucket(sinalCurto)
     const moldeOs = pickMolde(envelopeData, bucketAlvo, tipologiaAlvo)
-    // Default markup (custo→preço) when the edital states no explicit
-    // BDI/margem: median of same-type history. Fed to the model AND used as
-    // the deterministic fallback in onFinish (the model can't reliably
-    // multiply custo×(1+v) consistently).
+    // Modalidade contratual: Execução de Obra → Administração; demais → Empreitada.
+    // Override do usuário (resumo.modalidade gravado na UI) tem prioridade.
+    const orcResumo = (projeto.orcamento?.dados as unknown as OrcamentoDados | null)?.resumo as
+      | { modalidade?: string }
+      | undefined
+    const modalidadeOverrideRaw = String(orcResumo?.modalidade ?? '').toLowerCase()
+    const modalidadeAlvo: 'empreitada' | 'administracao' =
+      modalidadeOverrideRaw === 'empreitada' || modalidadeOverrideRaw === 'administracao'
+        ? modalidadeOverrideRaw
+        : modalidadeBucket(sinalCurto)
+    // BDI sugerido: mediana de componentes do mesmo bucket+tipologia+modalidade.
+    // Quando raso (<2 comparáveis com bdiBlock), cai para medianMargem (single %)
+    // como fallback seguro — orçamento ainda fecha custo→preço, só sem o detalhe
+    // por componente.
+    const bdiSugerido = medianBdiByModalidade(envelopeData, bucketAlvo, tipologiaAlvo, modalidadeAlvo)
     const variacaoSugerida = medianMargem(envelopeData, bucketAlvo, tipologiaAlvo)
 
     function formatMolde(b: { titulo: string; dados: unknown }): string {
@@ -196,6 +212,17 @@ export async function POST(request: NextRequest) {
         `${b.titulo} — tipo "${bucketAlvo}" | tipologia "${tipologiaAlvo}"${prazo ? ` | prazo ${prazo} meses` : ''}${preco ? ` | preço ${brl(preco)}` : ''}`,
         `Este é o projeto histórico do MESMO TIPO mais representativo (preço mediano do bucket). Use a composição abaixo como TEMPLATE: replique as MESMAS funções/cargos e a MESMA proporção de horas entre eles, ajustando só a escala pelo prazo do projeto novo e por evidência explícita de porte no edital.`,
       ]
+      // Materiais (Suprimentos) do MOLDE — sinaliza a proporção realística de
+      // material vs mão-de-obra histórica, para a IA replicar quando aplicável.
+      const sup = (d as { suprimentosTotais?: { custoTotal?: number; vendaTotal?: number } }).suprimentosTotais
+      if (sup?.custoTotal && sup.custoTotal > 0) {
+        const totLab = (d.equipes ?? []).reduce((s, e) => s + (e.custoTotal ?? 0), 0)
+        const pct = totLab > 0 ? (sup.custoTotal / (totLab + sup.custoTotal)) * 100 : 0
+        out.push(
+          `Suprimentos (materiais) do MOLDE: ${brl(sup.custoTotal)} de custo${sup.vendaTotal ? ` (venda ${brl(sup.vendaTotal)})` : ''} — ${pct.toFixed(1)}% do custo total. Se o escopo do novo projeto envolver materiais, emita itens correspondentes nessa proporção.`,
+        )
+      }
+
       const totCusto = (d.equipes ?? []).reduce((s, e) => s + (e.custoTotal ?? 0), 0)
       for (const e of d.equipes ?? []) {
         const hh = e.totalHH ?? 0
@@ -222,6 +249,19 @@ export async function POST(request: NextRequest) {
           `${variacaoSugerida.toFixed(1)}% (mediana de margem dos projetos "${bucketAlvo}" do histórico).`
         : ''
 
+    // BDI estruturado: modalidade + componentes (Lucro/Taxa Admin + Overhead + …;
+    // PIS + COFINS + ISSQN + …). A IA preenche `bdi` no JSON; o servidor recalcula
+    // bdiCalculado pela fórmula Excel da modalidade (recomputeTotais).
+    const bdiTexto = bdiSugerido
+      ? `## BDI PADRÃO (estruturado, modalidade: ${modalidadeAlvo})\n` +
+        `Para esta combinação produto/tipologia/modalidade ("${bucketAlvo}" × "${tipologiaAlvo}" × ${modalidadeAlvo}), os componentes medianos do histórico são:\n` +
+        `Margem: ${bdiSugerido.margemComponentes.map((c) => `${c.label}=${c.valor.toFixed(2)}%`).join(', ')}\n` +
+        `Impostos: ${bdiSugerido.impostosComponentes.map((c) => `${c.label}=${c.valor.toFixed(2)}%`).join(', ')}\n` +
+        `BDI calculado mediano = ${bdiSugerido.bdiCalculado.toFixed(2)}% (fórmula ${modalidadeAlvo === 'empreitada' ? '1/(1−M−I)−1' : '(1+M)/(1−I)−1'}).\n` +
+        `Preencha o campo "bdi" do JSON com modalidade="${modalidadeAlvo}" + componentes (use estes valores se o edital não disser outra coisa). O sistema RECALCULA "bdiCalculado" e o "precoVenda" via fórmula determinista — não precisa multiplicar.`
+      : `## BDI PADRÃO (modo simples — sem comparáveis suficientes para decompor)\n` +
+        `Modalidade detectada: ${modalidadeAlvo}. Como o histórico tem menos de 2 projetos com BDI decomposto para esta combinação, use o campo legacy "variacaoPerc" (mediana de margem = ${variacaoSugerida?.toFixed(1) ?? '?'}%) e deixe "bdi" ausente.`
+
     const tipologiaTexto =
       `## TIPOLOGIA DA DEMANDA (filtro rígido)\n` +
       `Este projeto foi classificado como tipologia "${tipologiaAlvo}" (produto "${bucketAlvo}"). ` +
@@ -231,6 +271,7 @@ export async function POST(request: NextRequest) {
 
     const baseTexto = [
       tipologiaTexto,
+      bdiTexto,
       ...(variacaoTexto ? [variacaoTexto] : []),
       ...(moldeEntry ? [formatMolde(moldeEntry)] : []),
       ...(historicosFormatted.length > 0
@@ -284,16 +325,21 @@ export async function POST(request: NextRequest) {
           // Pin the effective tipologia (override or auto) onto the orçamento
           // so the clamp filters by the same rigid tipologia used for the
           // mold, and the UI can show/edit it. Don't trust the model's echo.
-          if (orcamentoRaw.resumo) orcamentoRaw.resumo.tipologia = tipologiaAlvo
+          if (orcamentoRaw.resumo) {
+            orcamentoRaw.resumo.tipologia = tipologiaAlvo
+            ;(orcamentoRaw.resumo as { modalidade?: string }).modalidade = modalidadeAlvo
+          }
           // Deterministic envelope enforcement — the model cannot self-enforce
           // the cost cap reliably, so clamp against the real economics of the
           // historical projects (envelopeData built above, reused here).
           const { orc: orcClamped, applied } = clampToEnvelope(orcamentoRaw, envelopeData)
           if (applied) console.log(`[chat] envelope clamp applied to projeto=${projetoId}`)
           // Source of truth for the cost→price split: re-derive custoTotal /
-          // precoVenda / totalGeral from the (possibly clamped) CUSTO lines,
-          // defaulting variacaoPerc to the same-type historical median.
-          const orcamentoData = recomputeTotais(orcClamped, variacaoSugerida)
+          // precoVenda / totalGeral. When the AI emitted `bdi`, recomputeTotais
+          // recalcs bdiCalculado from its components via computeBdi. Otherwise
+          // falls back to bdiSugerido (structured median) or variacaoSugerida
+          // (single number), in that order.
+          const orcamentoData = recomputeTotais(orcClamped, bdiSugerido ?? variacaoSugerida)
 
           const existingOrc = await prisma.orcamento.findUnique({ where: { projetoId } })
           const dados = orcamentoData as unknown as Parameters<typeof prisma.orcamento.create>[0]['data']['dados']

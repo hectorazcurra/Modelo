@@ -60,6 +60,23 @@ export interface FaseCronograma {
   percentual: number
 }
 
+// Structured markup applied on top of cost to reach the client price. Mirrors
+// the DASHBOARD layout of the Pricing template (modalidade Empreitada vs
+// Administração; Margem = principal + 3 outros; Impostos = 3-4 componentes).
+// Values are stored in PERCENT (11 = 11%) for UI ergonomics. `bdiCalculado`
+// is the determinista result of the modalidade-specific formula and equals
+// `variacaoPerc` for back-compat with code that only reads the single number.
+export interface BdiComponente {
+  label: string
+  valor: number   // percent (11 = 11%)
+}
+export interface BdiOrcamento {
+  modalidade: 'empreitada' | 'administracao'
+  margemComponentes: BdiComponente[]    // first item = principal (Lucro|Taxa Admin)
+  impostosComponentes: BdiComponente[]  // PIS, COFINS, ISSQN, CPRB, ...
+  bdiCalculado: number                  // percent
+}
+
 export interface OrcamentoDados {
   resumo: {
     objeto: string
@@ -75,6 +92,10 @@ export interface OrcamentoDados {
     // filter when picking the historical mold/envelope — same PRODUTO but
     // different tipologia have very different economics.
     tipologia?: string
+    // Contract modalidade ('empreitada' | 'administracao'). Auto-detected from
+    // the edital ("Execução de Obra" → administracao; else empreitada) and
+    // user-editable on the panel. Determines which BDI formula applies.
+    modalidade?: 'empreitada' | 'administracao'
   }
   escopo: string[]
   itens: OrcamentoItem[]
@@ -89,7 +110,14 @@ export interface OrcamentoDados {
   // chegar ao preço cobrado do cliente. precoVenda = custoTotal × (1+var/100).
   // totalGeral é mantido = precoVenda (compatibilidade + clamp de envelope).
   custoTotal: number
+  // variacaoPerc é o markup único usado por `precoVenda = custoTotal × (1 +
+  // variacaoPerc/100)`. Quando `bdi` está preenchido, variacaoPerc é DERIVADO
+  // de `bdi.bdiCalculado` (recomputeTotais garante o nexo). Quando `bdi` está
+  // ausente (orçamento legado), variacaoPerc é o único campo editável.
   variacaoPerc: number
+  // Composição estruturada do BDI: modalidade + componentes editáveis. Quando
+  // presente, é a fonte da verdade; `variacaoPerc` é derivado dele.
+  bdi?: BdiOrcamento
   precoVenda: number
   totalGeral: number
   observacoes: string
@@ -162,6 +190,17 @@ export interface HistoricoDados {
     impostos?: number
     hhMOD?: number
     bdi?: number
+    // Structured BDI breakdown extracted from DASHBOARD A24/D24–D35.
+    // Lets the UI show Lucro / Taxa Admin as primary editable and the rest in
+    // an "Avançado" expansible. bdiCalculado equals the legacy `bdi` value.
+    bdiBlock?: {
+      modalidade?: 'empreitada' | 'administracao' | null
+      margemComponentes?: Array<{ label: string; valor: number }>
+      impostosComponentes?: Array<{ label: string; valor: number }>
+      bdiCalculado?: number
+      formula?: string
+    } | null
+    modalidade?: 'empreitada' | 'administracao' | null
     areaM2?: number
   } | null
   categorias?: PPUCategoria[] | null
@@ -175,6 +214,9 @@ export interface HistoricoDados {
   }> | null
   cartaConvite?: TextSection
   suprimentos?: TextSection
+  // Structured material totals from the Tarefas aggregate row (separate from
+  // `suprimentos` which is the free text of the "03. Suprimentos" folder).
+  suprimentosTotais?: { custoTotal?: number; vendaTotal?: number } | null
   engenharia?: TextSection
   propostas?: TextSection
   outrosOrcamento?: TextSection

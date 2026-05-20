@@ -16,7 +16,7 @@ import {
 import { useState, useEffect } from 'react'
 import { formatCurrency, extractOs } from '@/lib/utils'
 import { HistoricoModal } from './HistoricoModal'
-import type { OrcamentoDados, OrcamentoItem, MaoDeObra, FaseCronograma, LinhaBaseInfo } from '@/types'
+import type { OrcamentoDados, OrcamentoItem, MaoDeObra, FaseCronograma, LinhaBaseInfo, BdiOrcamento } from '@/types'
 
 interface OrcamentoPanelProps {
   dados: OrcamentoDados | null
@@ -29,17 +29,48 @@ interface OrcamentoPanelProps {
 
 type EditingLine = { type: 'item'; idx: number } | { type: 'mdo'; idx: number }
 
-// Cost→price nexus, mirrored from lib/ai/analyzer.recomputeTotais so the UI
-// shows exactly what the server persists. Lines are CUSTO; the client price
-// is custoTotal × (1 + variacaoPerc/100). totalGeral is kept = precoVenda.
+// Cost→price nexus, mirrored from lib/ai/analyzer (computeBdi + recomputeTotais)
+// so the UI shows exactly what the server persists. Lines are CUSTO; the client
+// price is custoTotal × (1 + variacaoPerc/100). When `bdi` is set, variacaoPerc
+// is derived from its components via the modalidade-specific formula; else the
+// legacy single-number variacaoPerc applies.
+function computeBdiPercent(b: BdiOrcamento): number {
+  const M = b.margemComponentes.reduce((s, c) => s + (Number.isFinite(c.valor) ? c.valor : 0), 0) / 100
+  const I = b.impostosComponentes.reduce((s, c) => s + (Number.isFinite(c.valor) ? c.valor : 0), 0) / 100
+  let frac = 0
+  if (b.modalidade === 'empreitada') {
+    if (M + I >= 0.999) return 0
+    frac = 1 / (1 - M - I) - 1
+  } else {
+    if (I >= 0.999) return 0
+    frac = (1 + M) / (1 - I) - 1
+  }
+  return Math.round(frac * 10000) / 100
+}
+
 function recalcTotais(d: OrcamentoDados): OrcamentoDados {
   const totalMateriais = d.itens.reduce((s, i) => s + (i.total || 0), 0)
   const totalMaoDeObra = d.maoDeObra.reduce((s, m) => s + (m.total || 0), 0)
   const custoTotal = totalMateriais + totalMaoDeObra
-  const variacaoPerc =
-    Number.isFinite(d.variacaoPerc) && d.variacaoPerc >= 0 ? d.variacaoPerc : 0
+  let bdi = d.bdi
+  let variacaoPerc: number
+  if (bdi) {
+    bdi = { ...bdi, bdiCalculado: computeBdiPercent(bdi) }
+    variacaoPerc = bdi.bdiCalculado
+  } else {
+    variacaoPerc = Number.isFinite(d.variacaoPerc) && d.variacaoPerc >= 0 ? d.variacaoPerc : 0
+  }
   const precoVenda = Math.round(custoTotal * (1 + variacaoPerc / 100))
-  return { ...d, totalMateriais, totalMaoDeObra, custoTotal, variacaoPerc, precoVenda, totalGeral: precoVenda }
+  return {
+    ...d,
+    totalMateriais,
+    totalMaoDeObra,
+    custoTotal,
+    variacaoPerc,
+    ...(bdi ? { bdi } : {}),
+    precoVenda,
+    totalGeral: precoVenda,
+  }
 }
 
 export function OrcamentoPanel({
@@ -190,6 +221,34 @@ export function OrcamentoPanel({
     persistLine({ ...localDados, resumo: { ...localDados.resumo, tipologia: t } })
   }
 
+  // Edit any part of the BDI structure (modalidade / margem components /
+  // impostos components). recalcTotais re-runs computeBdiPercent to keep
+  // bdiCalculado, variacaoPerc and precoVenda coherent.
+  function setBdi(next: BdiOrcamento) {
+    if (!localDados) return
+    persistLine(recalcTotais({ ...localDados, bdi: next }))
+  }
+  // Override modalidade on the orçamento (also stored in resumo.modalidade so
+  // the next AI regeneration honors it as the rigid override).
+  function setModalidade(m: 'empreitada' | 'administracao') {
+    if (!localDados) return
+    const base: BdiOrcamento = localDados.bdi
+      ? { ...localDados.bdi, modalidade: m }
+      : {
+          modalidade: m,
+          margemComponentes: [{ label: m === 'empreitada' ? 'Lucro' : 'Taxa de Administração', valor: 11 }],
+          impostosComponentes: [],
+          bdiCalculado: 0,
+        }
+    persistLine(
+      recalcTotais({
+        ...localDados,
+        bdi: base,
+        resumo: { ...localDados.resumo, modalidade: m } as OrcamentoDados['resumo'],
+      }),
+    )
+  }
+
   const pendingCount =
     localDados.itens.filter((i) => !i.status || i.status === 'pending').length +
     localDados.maoDeObra.filter((m) => !m.status || m.status === 'pending').length
@@ -302,24 +361,34 @@ export function OrcamentoPanel({
           const pVenda =
             localDados.precoVenda || (cTot ? Math.round(cTot * (1 + vPerc / 100)) : 0) || localDados.totalGeral || 0
           if (cTot <= 0 && pVenda <= 0) return null
+          const bdi = localDados.bdi
           return (
             <div className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 space-y-3">
               <div className="flex items-center justify-between text-sm">
                 <span className="text-[#A3A3A3]">Custo total do projeto</span>
                 <span className="font-semibold text-[#FAFAFA]">{formatCurrency(cTot)}</span>
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-[#A3A3A3]">
-                  Variação para cobrança <span className="text-[#666666]">(BDI/margem)</span>
-                </span>
-                <VariacaoEditor value={vPerc} disabled={saving} onCommit={setVariacao} />
-              </div>
+              {bdi ? (
+                <BdiEditor
+                  bdi={bdi}
+                  disabled={saving}
+                  onCommit={setBdi}
+                  onModalidade={setModalidade}
+                />
+              ) : (
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-[#A3A3A3]">
+                    Variação para cobrança <span className="text-[#666666]">(BDI/margem)</span>
+                  </span>
+                  <VariacaoEditor value={vPerc} disabled={saving} onCommit={setVariacao} />
+                </div>
+              )}
               <div className="flex items-center justify-between pt-3 border-t border-amber-500/20">
                 <div>
                   <div className="text-xs text-[#A3A3A3] mb-0.5">Valor a orçar (cobrança ao cliente)</div>
                   <div className="text-2xl font-bold text-amber-400">{formatCurrency(pVenda)}</div>
                   <div className="text-[11px] text-[#666666] mt-0.5">
-                    = {formatCurrency(cTot)} + {vPerc.toFixed(1)}%
+                    = {formatCurrency(cTot)} + {vPerc.toFixed(2)}%
                   </div>
                 </div>
                 <div className="text-right space-y-1">
@@ -876,6 +945,171 @@ function AddMdoForm({
         </button>
       </div>
     </div>
+  )
+}
+
+// Structured BDI editor mirroring the DASHBOARD layout of the Metodo Pricing
+// template. Modalidade dropdown selects between Empreitada and Administração;
+// the principal margin (Lucro / Taxa de Administração) is always visible as
+// the main editable; an "Avançado" disclosure exposes every other Margem and
+// Imposto component. The BDI total is recomputed live by computeBdiPercent.
+function BdiEditor({
+  bdi,
+  disabled,
+  onCommit,
+  onModalidade,
+}: {
+  bdi: BdiOrcamento
+  disabled?: boolean
+  onCommit: (next: BdiOrcamento) => void
+  onModalidade: (m: 'empreitada' | 'administracao') => void
+}) {
+  const [showAvancado, setShowAvancado] = useState(false)
+  const principal = bdi.margemComponentes[0] ?? { label: 'Lucro', valor: 0 }
+  const principalLabel = bdi.modalidade === 'administracao' ? 'Taxa de Administração' : 'Lucro'
+
+  function setComponent(group: 'margem' | 'impostos', idx: number, valor: number) {
+    const arr = group === 'margem' ? [...bdi.margemComponentes] : [...bdi.impostosComponentes]
+    if (!arr[idx]) return
+    arr[idx] = { ...arr[idx], valor }
+    onCommit({
+      ...bdi,
+      ...(group === 'margem' ? { margemComponentes: arr } : { impostosComponentes: arr }),
+    })
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-[#A3A3A3]">
+          Modalidade <span className="text-[#666666]">(BDI)</span>
+        </span>
+        <select
+          value={bdi.modalidade}
+          disabled={disabled}
+          onChange={(e) => onModalidade(e.target.value as 'empreitada' | 'administracao')}
+          className="bg-[#0A0A0A] border border-[#2A2A2A] hover:border-amber-500/40 rounded px-2 py-1 text-xs text-amber-400 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+        >
+          <option value="empreitada">Empreitada</option>
+          <option value="administracao">Administração</option>
+        </select>
+      </div>
+      <div className="flex items-center justify-between text-sm">
+        <span className="text-[#A3A3A3]">{principalLabel}</span>
+        <NumberInput
+          value={principal.valor}
+          suffix="%"
+          disabled={disabled}
+          onCommit={(v) => setComponent('margem', 0, v)}
+        />
+      </div>
+      <div className="flex items-center justify-between text-sm pt-1 border-t border-amber-500/10">
+        <span className="text-[#A3A3A3]">BDI calculado</span>
+        <span className="font-semibold text-amber-400">{bdi.bdiCalculado.toFixed(2)}%</span>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setShowAvancado((v) => !v)}
+        className="flex items-center gap-1 text-[11px] text-[#666666] hover:text-amber-400 transition-colors"
+      >
+        {showAvancado ? (
+          <ChevronUp className="w-3 h-3" />
+        ) : (
+          <ChevronDown className="w-3 h-3" />
+        )}
+        Avançado — componentes da Margem ({bdi.margemComponentes.length}) e Impostos ({bdi.impostosComponentes.length})
+      </button>
+
+      {showAvancado && (
+        <div className="space-y-2 pt-1 pl-1 border-l border-amber-500/10">
+          <div className="text-[10px] uppercase tracking-wider text-amber-400/60 mt-1">Margem</div>
+          {bdi.margemComponentes.map((c, i) => (
+            <BdiComponentRow
+              key={`m${i}`}
+              label={i === 0 ? principalLabel : c.label}
+              valor={c.valor}
+              disabled={disabled}
+              onCommit={(v) => setComponent('margem', i, v)}
+            />
+          ))}
+          <div className="text-[10px] uppercase tracking-wider text-amber-400/60 mt-2">Impostos</div>
+          {bdi.impostosComponentes.length > 0 ? (
+            bdi.impostosComponentes.map((c, i) => (
+              <BdiComponentRow
+                key={`i${i}`}
+                label={c.label}
+                valor={c.valor}
+                disabled={disabled}
+                onCommit={(v) => setComponent('impostos', i, v)}
+              />
+            ))
+          ) : (
+            <div className="text-[11px] text-[#666666]">Nenhum imposto configurado.</div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function BdiComponentRow({
+  label,
+  valor,
+  disabled,
+  onCommit,
+}: {
+  label: string
+  valor: number
+  disabled?: boolean
+  onCommit: (v: number) => void
+}) {
+  return (
+    <div className="flex items-center justify-between text-xs pl-2">
+      <span className="text-[#A3A3A3] flex-1 pr-2 truncate">{label}</span>
+      <NumberInput value={valor} suffix="%" disabled={disabled} onCommit={onCommit} compact />
+    </div>
+  )
+}
+
+function NumberInput({
+  value,
+  suffix,
+  disabled,
+  onCommit,
+  compact,
+}: {
+  value: number
+  suffix?: string
+  disabled?: boolean
+  onCommit: (v: number) => void
+  compact?: boolean
+}) {
+  const [draft, setDraft] = useState(String(value))
+  useEffect(() => setDraft(String(value)), [value])
+  function commit() {
+    const n = parseFloat(draft.replace(',', '.'))
+    if (Number.isFinite(n) && n >= 0 && n !== value) onCommit(n)
+    else setDraft(String(value))
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input
+        type="number"
+        step="0.1"
+        min="0"
+        value={draft}
+        disabled={disabled}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+          if (e.key === 'Escape') { setDraft(String(value)); (e.target as HTMLInputElement).blur() }
+        }}
+        className={`${compact ? 'w-16' : 'w-20'} bg-[#0A0A0A] border border-amber-500/30 rounded px-2 py-0.5 text-right text-sm text-amber-400 focus:outline-none focus:border-amber-400 disabled:opacity-50`}
+      />
+      {suffix && <span className="text-[#666666] text-xs">{suffix}</span>}
+    </span>
   )
 }
 

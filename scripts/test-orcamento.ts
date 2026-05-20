@@ -18,7 +18,7 @@ import * as path from 'node:path'
 import { generateText } from 'ai'
 import { extractTextFromFile } from '../lib/extractors/docs'
 import { buildSystemPrompt } from '../lib/ai/prompts'
-import { extractOrcamentoFromText, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, tipologiaBucket, normTipologia, type HistoricoEnvelope } from '../lib/ai/analyzer'
+import { extractOrcamentoFromText, clampToEnvelope, serviceBucket, pickMolde, medianMargem, recomputeTotais, tipologiaBucket, normTipologia, modalidadeBucket, medianBdiByModalidade, type HistoricoEnvelope } from '../lib/ai/analyzer'
 import { getModel } from '../lib/ai/providers'
 import { readPricingWorkbook, extractDashboard, extractTarefas } from '../lib/excel/extractor'
 import { brl, excerpt } from '../lib/utils'
@@ -180,6 +180,8 @@ async function main() {
   let envelopeData: HistoricoEnvelope[] = []
   let variacaoSugerida: number | null = null
   let tipologiaAlvo = ''
+  let modalidadeAlvo: 'empreitada' | 'administracao' = 'empreitada'
+  let bdiSugerido: import('../types').BdiOrcamento | null = null
   try {
     const ids = await prisma.$queryRaw<{ id: string }[]>`
       SELECT id FROM BaseConhecimento
@@ -199,16 +201,34 @@ async function main() {
       .slice(0, 30)
       .map((r) => ({ titulo: r.titulo, dados: typeof r.dados === 'string' ? safeParse(r.dados) : r.dados }))
     envelopeData = historicos.map((h) => {
-      const d = (h.dados ?? {}) as { os?: string; produto?: string | null; tipologia?: string | null; valorOrcado?: number | null; margem?: number | null; dashboard?: { precoVenda?: number | null; prazoContrato?: number | null; margemPerc?: number | null }; equipes?: Array<{ profissionais?: unknown[] }> }
+      const d = (h.dados ?? {}) as {
+        os?: string; produto?: string | null; tipologia?: string | null;
+        valorOrcado?: number | null; margem?: number | null;
+        dashboard?: { precoVenda?: number | null; prazoContrato?: number | null; margemPerc?: number | null; modalidade?: 'empreitada' | 'administracao' | null; bdiBlock?: { margemComponentes?: Array<{ label: string; valor: number }>; impostosComponentes?: Array<{ label: string; valor: number }> } | null };
+        equipes?: Array<{ profissionais?: unknown[] }>;
+      }
       const riqueza = (d.equipes ?? []).reduce((s, e) => s + (e.profissionais?.length ?? 0), 0)
-      return { os: d.os ?? '', produto: d.produto ?? d.tipologia ?? null, precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null, prazoMeses: d.dashboard?.prazoContrato ?? null, margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null, tipologia: d.tipologia ?? null, riqueza }
+      return {
+        os: d.os ?? '',
+        produto: d.produto ?? d.tipologia ?? null,
+        precoVenda: d.dashboard?.precoVenda ?? d.valorOrcado ?? null,
+        prazoMeses: d.dashboard?.prazoContrato ?? null,
+        margemPerc: d.dashboard?.margemPerc ?? d.margem ?? null,
+        tipologia: d.tipologia ?? null,
+        riqueza,
+        modalidade: d.dashboard?.modalidade ?? null,
+        margemComponentes: d.dashboard?.bdiBlock?.margemComponentes ?? null,
+        impostosComponentes: d.dashboard?.bdiBlock?.impostosComponentes ?? null,
+      }
     })
     const sinalCurto = pdfTexto.slice(0, 600)
     const bucketAlvo = serviceBucket(sinalCurto)
     const tipologiaOverride = tipologiaFlag ? normTipologia(tipologiaFlag) : 'outro'
     tipologiaAlvo =
       tipologiaOverride !== 'outro' ? tipologiaOverride : tipologiaBucket(sinalCurto)
+    modalidadeAlvo = modalidadeBucket(sinalCurto)
     variacaoSugerida = medianMargem(envelopeData, bucketAlvo, tipologiaAlvo)
+    bdiSugerido = medianBdiByModalidade(envelopeData, bucketAlvo, tipologiaAlvo, modalidadeAlvo)
     const moldeOs = pickMolde(envelopeData, bucketAlvo, tipologiaAlvo)
     const moldeEntry = moldeOs
       ? historicos.find((h) => (h.dados as HistoricoDados)?.os === moldeOs)
@@ -219,7 +239,7 @@ async function main() {
       `### Projetos históricos da empresa (${historicos.length} projetos com dados)`,
       ...historicos.map(formatHistorico),
     ].join('\n\n')
-    console.log(`Base: ${historicos.length} projetos | molde=${moldeOs ?? 'nenhum'} (bucket=${bucketAlvo} / tipologia=${tipologiaAlvo}) | ${baseTexto.length} chars`)
+    console.log(`Base: ${historicos.length} projetos | molde=${moldeOs ?? 'nenhum'} (bucket=${bucketAlvo} / tipologia=${tipologiaAlvo} / modalidade=${modalidadeAlvo}${bdiSugerido ? ` BDI~${bdiSugerido.bdiCalculado.toFixed(1)}%` : ''}) | ${baseTexto.length} chars`)
   } finally {
     await prisma.$disconnect()
   }
@@ -242,12 +262,15 @@ async function main() {
     console.log(text)
     process.exit(1)
   }
-  // Pin the effective tipologia onto the orçamento so the clamp filters by
-  // the same rigid tipologia used for the mold (mirror of chat route).
-  if (orcRaw.resumo) orcRaw.resumo.tipologia = tipologiaAlvo
+  // Pin the effective tipologia + modalidade onto the orçamento so the clamp
+  // filters consistently with the mold (mirror of chat route onFinish).
+  if (orcRaw.resumo) {
+    orcRaw.resumo.tipologia = tipologiaAlvo
+    ;(orcRaw.resumo as { modalidade?: string }).modalidade = modalidadeAlvo
+  }
   const { orc: orcClamped, applied: clampApplied } = clampToEnvelope(orcRaw, envelopeData)
   if (clampApplied) console.log('⚙️  Envelope clamp APLICADO (total da IA excedia a economia histórica)\n')
-  const orc = recomputeTotais(orcClamped, variacaoSugerida)
+  const orc = recomputeTotais(orcClamped, bdiSugerido ?? variacaoSugerida)
   if (outPath) fs.writeFileSync(outPath, JSON.stringify(orc, null, 2))
 
   // ── 4. Extract real Pricing ───────────────────────────────────────────────
@@ -270,6 +293,18 @@ async function main() {
   const rows: [string, string, string, string][] = [
     ['Prazo', `${dash.prazoContrato ?? '?'} ${dash.prazoUnidade ?? 'm'}`, orc.resumo.prazo, ''],
     ['Tipologia', 'n/d', tipologiaAlvo, ''],
+    [
+      'Modalidade',
+      dash.modalidade ?? 'n/d',
+      (orc.bdi?.modalidade ?? modalidadeAlvo),
+      '',
+    ],
+    [
+      'BDI %',
+      dash.bdi != null ? `${(dash.bdi * 100).toFixed(2)}%` : 'n/d',
+      `${(orc.bdi?.bdiCalculado ?? orc.variacaoPerc).toFixed(2)}%`,
+      '',
+    ],
     ['Preço Venda', fmt(dash.precoVenda), fmt(orc.precoVenda), pct(orc.precoVenda, dash.precoVenda ?? 0)],
     ['Custo MOD', fmt(dash.custoMaoDeObraDireta), fmt(orc.totalMaoDeObra), pct(orc.totalMaoDeObra, dash.custoMaoDeObraDireta ?? 0)],
     ['Custo Total', fmt(dash.custoTotal), fmt(orc.custoTotal), pct(orc.custoTotal, dash.custoTotal ?? 0)],

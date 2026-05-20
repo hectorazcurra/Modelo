@@ -1,5 +1,26 @@
 import * as XLSX from 'xlsx'
 
+export interface BdiComponente {
+  label: string
+  valor: number   // fração decimal (0.11 = 11%)
+}
+
+export interface BdiBloco {
+  // Modalidade ativa do bloco — A24/A37 da DASHBOARD. Quando 'empreitada' a
+  // célula da margem principal exibe "Lucro"; quando 'administracao' exibe
+  // "Taxa de Administração". A fórmula de D35 (ou D48) varia por modalidade.
+  modalidade: 'empreitada' | 'administracao' | null
+  margemComponentes: BdiComponente[]   // Lucro/Taxa Admin + Overhead + Taxa Neg + Custo Financeiro
+  impostosComponentes: BdiComponente[] // PIS + COFINS + ISSQN + CPRB
+  bdiCalculado: number                 // fração (0.4631 = 46.31%)
+  formula?: string                     // fórmula Excel de referência (sanity-check)
+}
+
+export interface SuprimentosBloco {
+  custoTotal: number   // soma dos materiais por linha (c28 do bloco agregado)
+  vendaTotal: number   // venda total dos materiais (c39)
+}
+
 export interface DashboardData {
   cliente: string | null
   projeto: string | null
@@ -17,6 +38,12 @@ export interface DashboardData {
   margemPerc: number | null
   impostos: number | null
   bdi: number | null
+  // Estrutura completa do BDI (Empreitada vs Administração + componentes
+  // editáveis) extraída do bloco DASHBOARD A24/D24–D35. bdiBlock.bdiCalculado
+  // é o mesmo valor de `bdi` acima; mantém-se ambos pelo back-compat (callers
+  // antigos só lêem `bdi`).
+  bdiBlock: BdiBloco | null
+  modalidade: 'empreitada' | 'administracao' | null
   areaM2: number | null
 }
 
@@ -230,7 +257,8 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
       cliente: null, projeto: null, unidade: null, municipio: null, uf: null,
       prazoContrato: null, prazoUnidade: null, precoVenda: null, precoPorMes: null,
       hhMOD: null, custoMaoDeObraDireta: null, custoTotal: null,
-      margemValor: null, margemPerc: null, impostos: null, bdi: null, areaM2: null,
+      margemValor: null, margemPerc: null, impostos: null, bdi: null,
+      bdiBlock: null, modalidade: null, areaM2: null,
     }
   }
 
@@ -281,8 +309,91 @@ export function extractDashboard(workbook: XLSX.WorkBook): DashboardData {
     // aggregate directly adjacent.
     impostos: parseMoeda(findNumericValueAfter(rows, 'valor total - impostos', 'impostos')),
     bdi: parseNumero(findCellValueAfterPartial(rows, 'bdi')),
+    bdiBlock: extractBdiBlock(sheet),
+    modalidade: normModalidade(sheet['A24']?.v),
     areaM2: areaVal && areaVal > 1 && areaVal < 5_000_000 ? areaVal : null,
   }
+}
+
+// ─── BDI structured block ────────────────────────────────────────────────────
+// The DASHBOARD tab encodes the BDI as: a modalidade toggle in A24, four
+// component rows for "Margem" (D25..D28), four for "Impostos" (D30..D33), and
+// the computed BDI in D35. The Excel formula in D35 branches on A24's value:
+//   Empreitada:    (1 / (1 − Σmargem − Σimpostos)) − 1
+//   Administração: (1 + Σmargem) / (1 − Σimpostos) − 1
+// We capture the components AND the calculated value so the UI can show a
+// "Lucro / Taxa Admin" main editable and an "Avançado" expansible.
+
+function normModalidade(v: unknown): 'empreitada' | 'administracao' | null {
+  const s = String(v ?? '').trim().toLowerCase()
+  if (!s) return null
+  if (/empreit/.test(s)) return 'empreitada'
+  if (/administra/.test(s)) return 'administracao'
+  return null
+}
+
+function readBdiComponente(sheet: XLSX.WorkSheet, row: number): BdiComponente | null {
+  const labelCell = sheet[`C${row}`]
+  const valorCell = sheet[`D${row}`]
+  const label = String(labelCell?.v ?? '').trim()
+  const valor = typeof valorCell?.v === 'number' ? valorCell.v : parseFloat(String(valorCell?.v ?? ''))
+  if (!label || !Number.isFinite(valor)) return null
+  return { label, valor }
+}
+
+export function extractBdiBlock(sheet: XLSX.WorkSheet | undefined): BdiBloco | null {
+  if (!sheet) return null
+  const modalidade = normModalidade(sheet['A24']?.v)
+  const margem = [25, 26, 27, 28]
+    .map((r) => readBdiComponente(sheet, r))
+    .filter((x): x is BdiComponente => x !== null)
+  const impostos = [30, 31, 32, 33]
+    .map((r) => readBdiComponente(sheet, r))
+    .filter((x): x is BdiComponente => x !== null)
+  const bdiCell = sheet['D35']
+  const bdiCalculado = typeof bdiCell?.v === 'number' ? bdiCell.v : parseFloat(String(bdiCell?.v ?? ''))
+  if (margem.length === 0 || impostos.length === 0 || !Number.isFinite(bdiCalculado)) return null
+  return {
+    modalidade,
+    margemComponentes: margem,
+    impostosComponentes: impostos,
+    bdiCalculado,
+    formula: bdiCell?.f ? String(bdiCell.f) : undefined,
+  }
+}
+
+// ─── Suprimentos / Materiais (Tarefas aggregate row) ─────────────────────────
+// Tarefas has a "Suprimentos" group header alongside "Valor de Serviços". The
+// per-item totals (custo & venda) for materials live in the same aggregate row
+// that holds the labor HH total — distinguishable because col 28 ("Custo Total"
+// of materials) and col 39 ("Venda Total" of materials) are pre-summed there.
+// Positions are fixed by the Metodo Pricing template; we still scan to find
+// the row in case of minor offsets.
+export function extractSuprimentos(workbook: XLSX.WorkBook): SuprimentosBloco | null {
+  const sheet = workbook.Sheets['Tarefas']
+  if (!sheet) return null
+  const rows = sheetToRows(sheet)
+  let headerRow = -1
+  for (let r = 0; r < rows.length; r++) {
+    if ((rows[r] ?? []).some((c) => String(c ?? '').trim() === 'Suprimentos')) {
+      headerRow = r
+      break
+    }
+  }
+  if (headerRow < 0) return null
+  for (let r = headerRow + 1; r < Math.min(headerRow + 15, rows.length); r++) {
+    const row = rows[r] ?? []
+    const hh = typeof row[14] === 'number' ? (row[14] as number) : NaN
+    const custoMat = typeof row[28] === 'number' ? (row[28] as number) : NaN
+    const vendaMat = typeof row[39] === 'number' ? (row[39] as number) : NaN
+    if (Number.isFinite(hh) && hh > 0 && Number.isFinite(custoMat)) {
+      return {
+        custoTotal: custoMat,
+        vendaTotal: Number.isFinite(vendaMat) ? vendaMat : 0,
+      }
+    }
+  }
+  return null
 }
 
 // Parse item code from cell: handles both numeric (1, 1.1) and string ("1", "1.1", "1.1.2")

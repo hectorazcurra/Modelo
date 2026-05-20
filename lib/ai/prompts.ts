@@ -20,7 +20,7 @@ export function buildSystemPrompt(ctx: PromptContext): string {
 5. **Nunca consulte referências externas**: Não use SINAPI, TCPO, tabelas de mercado ou qualquer dado que não esteja explicitamente na base abaixo.
 6. **NUNCA assuma full-time (100% FTE) para todas as funções**: a maioria dos projetos de gerenciamento tem dedicação VARIÁVEL por função. Use o HH real por função do projeto histórico de referência (campo "totalHH" das equipes). Em 22 dias úteis × 8h, 1 FTE = 176h/mês — funções com HH muito abaixo disso SÃO part-time e devem permanecer assim na sua projeção.
 7. **Prazo vem do edital, não do histórico**: leia o prazo do projeto novo no edital (procure "prazo", "duração", "X meses", "X semanas"). Use ESSE prazo para todos os cálculos. NÃO copie o prazo do projeto histórico de referência.
-8. **Linhas são CUSTO puro**: \`custoUnit\` e \`total\` de CADA linha (itens e mão de obra) são CUSTO, SEM BDI/margem/impostos. O preço cobrado do cliente NÃO está nas linhas — ele é derivado: \`precoVenda = custoTotal × (1 + variacaoPerc/100)\`, onde \`custoTotal = totalMateriais + totalMaoDeObra\`. Preencha \`variacaoPerc\` (em %) com o BDI/margem explícito do edital; se o edital não declarar, use a **VARIAÇÃO PADRÃO** informada na Base de Conhecimento. \`totalGeral\` = \`precoVenda\`. Nunca embuta a margem nas linhas.
+8. **Linhas são CUSTO puro**: \`custoUnit\` e \`total\` de CADA linha (itens e mão de obra) são CUSTO, SEM BDI/margem/impostos. O preço ao cliente é DERIVADO pela fórmula da modalidade contratual (ver seção "## BDI PADRÃO" da Base). Preencha o campo \`bdi\` com \`{ modalidade, margemComponentes[], impostosComponentes[] }\` (valores em %, ex.: Lucro 11) — o servidor recalcula \`bdiCalculado\` pela fórmula Excel: Empreitada → \`1/(1−M−I)−1\`; Administração → \`(1+M)/(1−I)−1\`. \`variacaoPerc\` é derivado de \`bdiCalculado\` (não precisa preencher; o servidor sobrescreve). \`precoVenda = round(custoTotal × (1+variacaoPerc/100))\`, \`totalGeral = precoVenda\`. Nunca embuta margem nas linhas.
 9. **SEM histórico do tipo → NÃO orce**: se NÃO houver bloco MOLDE E não houver ≥3 projetos do mesmo tipo de serviço na base, é PROIBIDO estimar valores. Não invente horas nem preços. Em vez disso: defina \`"semReferencia": true\`, deixe \`maoDeObra\` e \`itens\` vazios (ou com \`semHistorico: true\` e valores 0), zere os totais, e em \`observacoes\` explique claramente que não há projeto histórico comparável deste tipo e que o usuário deve inserir os valores manualmente. Ainda assim preencha \`resumo\` e \`resumo.contexto\` normalmente.
 
 ## Fluxo de análise ao receber um edital / carta convite:
@@ -186,6 +186,21 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
   "totalMateriais": 0,
   "totalMaoDeObra": 0,
   "custoTotal": 0,
+  "bdi": {
+    "modalidade": "empreitada | administracao — copie EXATAMENTE da seção BDI PADRÃO",
+    "margemComponentes": [
+      { "label": "Lucro",            "valor": 11.0 },
+      { "label": "Overhead",         "valor": 10.0 },
+      { "label": "Taxa de negociação", "valor": 2.0 },
+      { "label": "Custo Financeiro", "valor": 0.0 }
+    ],
+    "impostosComponentes": [
+      { "label": "PIS",    "valor": 0.65 },
+      { "label": "COFINS", "valor": 3.0 },
+      { "label": "ISSQN",  "valor": 5.0 }
+    ],
+    "bdiCalculado": 0
+  },
   "variacaoPerc": 0,
   "precoVenda": 0,
   "totalGeral": 0,
@@ -195,7 +210,9 @@ Liste em texto os projetos do mesmo tipo usados (OS, preço, prazo, preço/mês)
 
 **Campo "resumo.contexto" (OBRIGATÓRIO)**: sempre escreva 3-5 frases, em português claro e sem jargão, explicando o que o cliente pediu, a necessidade por trás, o escopo macro e restrições relevantes. É o que o usuário lê primeiro para validar se as horas e preços propostos fazem sentido.
 
-**Campos "custoTotal" / "variacaoPerc" / "precoVenda" / "totalGeral"**: as linhas são CUSTO. \`custoTotal = totalMateriais + totalMaoDeObra\`. \`variacaoPerc\` (%) = BDI/margem explícito do edital, ou a VARIAÇÃO PADRÃO da Base se o edital não declarar. \`precoVenda = round(custoTotal × (1 + variacaoPerc/100))\`. \`totalGeral = precoVenda\`. (O sistema recalcula estes 4 campos de forma determinística — preencha-os, mas mantenha-os coerentes.)
+**Campos "custoTotal" / "bdi" / "variacaoPerc" / "precoVenda" / "totalGeral"**: linhas são CUSTO. \`custoTotal = totalMateriais + totalMaoDeObra\`. O markup vai em \`bdi\` (estruturado por modalidade + componentes); o servidor calcula \`bdiCalculado\` pela fórmula da modalidade e popula \`variacaoPerc\` derivado. \`precoVenda = round(custoTotal × (1+variacaoPerc/100))\`, \`totalGeral = precoVenda\`. (Esses 5 campos são RECALCULADOS de forma determinística — preencha-os para guiar, mas o servidor sobrescreve.)
+
+**Materiais via Suprimentos do MOLDE**: se o MOLDE indicar Suprimentos > 10% do custo total (a seção "Suprimentos (materiais)" no bloco do MOLDE), emita linhas em \`itens\` representando esses materiais, na proporção observada. Se o escopo do novo projeto for puramente serviço (gerenciamento sem materiais), pode deixar \`itens\` vazio mesmo que o MOLDE tenha materiais.
 
 **Campo "resumo.tipologia"**: copie EXATAMENTE a tipologia informada na seção "## TIPOLOGIA DA DEMANDA" da Base (\`varejo\`, \`edificacoes\` ou \`infraestrutura\`). Os comparáveis/MOLDE já foram filtrados rigidamente para essa tipologia — NÃO use projetos de outra tipologia como referência, mesmo que o PRODUTO seja igual.
 
