@@ -101,7 +101,7 @@ export function ChatInput({ onSend, isLoading, onUpload, isUploading }: ChatInpu
               disabled={busy}
               onClick={() => fileInputRef.current?.click()}
               title="Anexar arquivos"
-              className="flex-shrink-0 w-9 h-9 rounded-xl border border-[#2A2A2A] bg-[#111111] flex items-center justify-center text-[#666666] hover:text-amber-400 hover:border-amber-500/40 transition-colors disabled:opacity-40"
+              className="flex-shrink-0 w-9 h-9 rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--fg-faint)] hover:text-amber-400 hover:border-amber-500/40 transition-colors disabled:opacity-40"
             >
               {isUploading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
@@ -135,7 +135,7 @@ export function ChatInput({ onSend, isLoading, onUpload, isUploading }: ChatInpu
           }
           rows={1}
           disabled={busy}
-          className="flex-1 rounded-xl border border-[#2A2A2A] bg-[#111111] px-3.5 py-2.5 text-sm text-[#FAFAFA] placeholder:text-[#666666] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none overflow-hidden disabled:opacity-50"
+          className="flex-1 rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] px-3.5 py-2.5 text-sm text-[var(--fg-base)] placeholder:text-[var(--fg-faint)] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none overflow-hidden disabled:opacity-50"
         />
 
         <button

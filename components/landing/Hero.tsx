@@ -27,7 +27,7 @@ export function Hero() {
           <span className="text-amber-400">inteligentes</span>
         </h1>
 
-        <p className="text-lg md:text-xl text-[#A3A3A3] max-w-2xl mx-auto mb-10 leading-relaxed">
+        <p className="text-lg md:text-xl text-[var(--fg-muted)] max-w-2xl mx-auto mb-10 leading-relaxed">
           Importe editais de licitação em PDF, deixe a IA analisar os requisitos e gere orçamentos
           detalhados com custo por m², mão de obra e cronograma.
         </p>
@@ -45,43 +45,43 @@ export function Hero() {
 
         {/* Preview image placeholder */}
         <div className="mt-16 relative">
-          <div className="rounded-xl border border-[#2A2A2A] bg-[#111111] overflow-hidden shadow-2xl shadow-black/50">
+          <div className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] overflow-hidden shadow-2xl shadow-black/50">
             {/* Fake browser chrome */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-[#2A2A2A] bg-[#0A0A0A]">
-              <div className="w-3 h-3 rounded-full bg-[#2A2A2A]" />
-              <div className="w-3 h-3 rounded-full bg-[#2A2A2A]" />
-              <div className="w-3 h-3 rounded-full bg-[#2A2A2A]" />
-              <div className="flex-1 mx-4 h-6 rounded bg-[#1A1A1A] border border-[#2A2A2A]" />
+            <div className="flex items-center gap-2 px-4 py-3 border-b border-[var(--border-base)] bg-[var(--bg-base)]">
+              <div className="w-3 h-3 rounded-full bg-[var(--border-base)]" />
+              <div className="w-3 h-3 rounded-full bg-[var(--border-base)]" />
+              <div className="w-3 h-3 rounded-full bg-[var(--border-base)]" />
+              <div className="flex-1 mx-4 h-6 rounded bg-[var(--bg-elev)] border border-[var(--border-base)]" />
             </div>
 
             {/* Fake split screen */}
             <div className="flex h-64 md:h-80">
-              <div className="w-2/5 border-r border-[#2A2A2A] p-4 flex flex-col gap-3">
+              <div className="w-2/5 border-r border-[var(--border-base)] p-4 flex flex-col gap-3">
                 <div className="flex items-start gap-2">
                   <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/30 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1 flex-1">
-                    <div className="h-2 bg-[#2A2A2A] rounded w-3/4" />
-                    <div className="h-2 bg-[#2A2A2A] rounded w-full" />
-                    <div className="h-2 bg-[#2A2A2A] rounded w-5/6" />
+                    <div className="h-2 bg-[var(--border-base)] rounded w-3/4" />
+                    <div className="h-2 bg-[var(--border-base)] rounded w-full" />
+                    <div className="h-2 bg-[var(--border-base)] rounded w-5/6" />
                   </div>
                 </div>
                 <div className="flex items-start gap-2 self-end flex-row-reverse">
                   <div className="w-6 h-6 rounded-full bg-blue-500/20 border border-blue-500/30 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1 flex-1">
-                    <div className="h-2 bg-[#1A1A1A] rounded w-2/3" />
-                    <div className="h-2 bg-[#1A1A1A] rounded w-1/2" />
+                    <div className="h-2 bg-[var(--bg-elev)] rounded w-2/3" />
+                    <div className="h-2 bg-[var(--bg-elev)] rounded w-1/2" />
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <div className="w-6 h-6 rounded-full bg-amber-500/20 border border-amber-500/30 flex-shrink-0 mt-0.5" />
                   <div className="space-y-1 flex-1">
-                    <div className="h-2 bg-[#2A2A2A] rounded w-full" />
-                    <div className="h-2 bg-[#2A2A2A] rounded w-3/4" />
-                    <div className="h-2 bg-[#2A2A2A] rounded w-2/3" />
-                    <div className="h-2 bg-[#2A2A2A] rounded w-5/6" />
+                    <div className="h-2 bg-[var(--border-base)] rounded w-full" />
+                    <div className="h-2 bg-[var(--border-base)] rounded w-3/4" />
+                    <div className="h-2 bg-[var(--border-base)] rounded w-2/3" />
+                    <div className="h-2 bg-[var(--border-base)] rounded w-5/6" />
                   </div>
                 </div>
-                <div className="mt-auto h-8 rounded-md border border-[#2A2A2A] bg-[#0A0A0A]" />
+                <div className="mt-auto h-8 rounded-md border border-[var(--border-base)] bg-[var(--bg-base)]" />
               </div>
               <div className="flex-1 p-4 space-y-2">
                 <div className="flex items-center justify-between mb-3">
@@ -90,17 +90,17 @@ export function Hero() {
                 </div>
                 {[85, 60, 95, 40, 70].map((w, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <div className="h-2 bg-[#1A1A1A] rounded w-24 flex-shrink-0" />
+                    <div className="h-2 bg-[var(--bg-elev)] rounded w-24 flex-shrink-0" />
                     <div
-                      className="h-2 bg-[#2A2A2A] rounded"
+                      className="h-2 bg-[var(--border-base)] rounded"
                       style={{ width: `${w}%` }}
                     />
                     <div className="h-2 bg-amber-500/40 rounded w-16 flex-shrink-0" />
                   </div>
                 ))}
-                <div className="pt-2 border-t border-[#2A2A2A]">
+                <div className="pt-2 border-t border-[var(--border-base)]">
                   <div className="flex justify-between">
-                    <div className="h-3 bg-[#2A2A2A] rounded w-24" />
+                    <div className="h-3 bg-[var(--border-base)] rounded w-24" />
                     <div className="h-3 bg-amber-500/60 rounded w-28" />
                   </div>
                 </div>
@@ -109,7 +109,7 @@ export function Hero() {
           </div>
 
           {/* Gradient fade */}
-          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[#0A0A0A] to-transparent" />
+          <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-[var(--bg-base)] to-transparent" />
         </div>
       </div>
     </section>

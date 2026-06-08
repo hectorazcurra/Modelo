@@ -38,16 +38,16 @@ export default async function ProjetoHistoricoPage({ params }: PageProps) {
   const titulo = `OS ${osCode}${dados.cliente ? ` — ${dados.cliente}` : ''}`
 
   return (
-    <div className="min-h-screen bg-[#0A0A0A] text-[#FAFAFA]">
-      <header className="border-b border-[#2A2A2A] px-6 h-14 flex items-center gap-3">
+    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--fg-base)]">
+      <header className="border-b border-[var(--border-base)] px-6 h-14 flex items-center gap-3">
         <Link
           href="/dashboard"
-          className="flex items-center gap-1.5 text-sm text-[#A3A3A3] hover:text-[#FAFAFA] transition-colors"
+          className="flex items-center gap-1.5 text-sm text-[var(--fg-muted)] hover:text-[var(--fg-base)] transition-colors"
         >
           <ArrowLeft className="w-4 h-4" />
           Dashboard
         </Link>
-        <div className="w-px h-4 bg-[#2A2A2A]" />
+        <div className="w-px h-4 bg-[var(--border-base)]" />
         <Link href="/">
           <div className="w-7 h-7 rounded-md bg-amber-500 flex items-center justify-center">
             <Building2 className="w-3.5 h-3.5 text-black" strokeWidth={2.5} />
@@ -57,11 +57,11 @@ export default async function ProjetoHistoricoPage({ params }: PageProps) {
       </header>
 
       <main className="max-w-3xl mx-auto py-8 px-4">
-        <div className="rounded-xl border border-[#2A2A2A] bg-[#111111]">
-          <div className="px-6 pt-6 pb-4 border-b border-[#2A2A2A]">
+        <div className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)]">
+          <div className="px-6 pt-6 pb-4 border-b border-[var(--border-base)]">
             <h2 className="font-bold text-lg">{titulo}</h2>
             {dados.descricao && (
-              <p className="text-sm text-[#A3A3A3] mt-1">{dados.descricao}</p>
+              <p className="text-sm text-[var(--fg-muted)] mt-1">{dados.descricao}</p>
             )}
           </div>
           <HistoricoDetalheView os={osCode} dados={dados} mode="full" />

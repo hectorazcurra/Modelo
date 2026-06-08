@@ -74,11 +74,11 @@ export function ChatPanel({
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
               <Bot className="w-6 h-6 text-amber-400" />
             </div>
-            <h3 className="font-medium text-[#FAFAFA] mb-2">Assistente de Orçamentos</h3>
+            <h3 className="font-medium text-[var(--fg-base)] mb-2">Assistente de Orçamentos</h3>
 
             {hasPdf ? (
               <>
-                <p className="text-sm text-[#A3A3A3] mb-5 max-w-xs">
+                <p className="text-sm text-[var(--fg-muted)] mb-5 max-w-xs">
                   Documentos carregados. Clique em "Analisar" para gerar o orçamento, ou envie mais arquivos.
                 </p>
                 <button
@@ -92,7 +92,7 @@ export function ChatPanel({
               </>
             ) : (
               <>
-                <p className="text-sm text-[#A3A3A3] mb-5 max-w-xs">
+                <p className="text-sm text-[var(--fg-muted)] mb-5 max-w-xs">
                   Carregue a carta convite, edital ou qualquer documento do projeto para começar.
                 </p>
                 <UploadZone onUpload={onUpload} isUploading={isUploading} />
@@ -108,7 +108,7 @@ export function ChatPanel({
             <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
               <Bot className="w-3.5 h-3.5 text-amber-400" />
             </div>
-            <div className="bg-[#1A1A1A] border border-[#2A2A2A] rounded-2xl rounded-tl-sm px-4 py-3">
+            <div className="bg-[var(--bg-elev)] border border-[var(--border-base)] rounded-2xl rounded-tl-sm px-4 py-3">
               <div className="flex gap-1">
                 <span className="w-2 h-2 rounded-full bg-amber-400/60 animate-bounce [animation-delay:0ms]" />
                 <span className="w-2 h-2 rounded-full bg-amber-400/60 animate-bounce [animation-delay:150ms]" />
@@ -134,7 +134,7 @@ export function ChatPanel({
       </div>
 
       {/* Input */}
-      <div className="flex-shrink-0 border-t border-[#2A2A2A] p-4">
+      <div className="flex-shrink-0 border-t border-[var(--border-base)] p-4">
         <ChatInput
           onSend={onSendMessage}
           isLoading={isLoading}
@@ -160,15 +160,15 @@ function UploadZone({
   return (
     <div
       onClick={() => !isUploading && fileInputRef.current?.click()}
-      className="w-full max-w-xs rounded-xl border-2 border-dashed border-[#2A2A2A] hover:border-amber-500/50 hover:bg-[#111111] cursor-pointer transition-all p-6 text-center"
+      className="w-full max-w-xs rounded-xl border-2 border-dashed border-[var(--border-base)] hover:border-amber-500/50 hover:bg-[var(--bg-surface)] cursor-pointer transition-all p-6 text-center"
     >
-      <Upload className="w-7 h-7 text-[#A3A3A3] mx-auto mb-2" />
-      <p className="text-sm text-[#A3A3A3]">
+      <Upload className="w-7 h-7 text-[var(--fg-muted)] mx-auto mb-2" />
+      <p className="text-sm text-[var(--fg-muted)]">
         {isUploading ? 'Processando…' : (
           <>Clique ou arraste arquivos</>
         )}
       </p>
-      <p className="text-xs text-[#555555] mt-1">
+      <p className="text-xs text-[var(--fg-faint)] mt-1">
         PDF · DOCX · PPTX · MSG · EML · XLSX · TXT · ZIP
       </p>
       <input
@@ -220,8 +220,8 @@ function ChatMessage({ message }: { message: UIMessage }) {
       <div
         className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed whitespace-pre-wrap ${
           isUser
-            ? 'bg-blue-500/10 border border-blue-500/20 rounded-tr-sm text-[#FAFAFA]'
-            : 'bg-[#1A1A1A] border border-[#2A2A2A] rounded-tl-sm text-[#FAFAFA]'
+            ? 'bg-blue-500/10 border border-blue-500/20 rounded-tr-sm text-[var(--fg-base)]'
+            : 'bg-[var(--bg-elev)] border border-[var(--border-base)] rounded-tl-sm text-[var(--fg-base)]'
         }`}
       >
         {text}

@@ -116,7 +116,7 @@ export function NewProjectForm() {
 
       {/* Project name */}
       <div>
-        <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
+        <label className="block text-sm font-medium text-[var(--fg-base)] mb-1.5">
           Nome do Projeto <span className="text-red-400">*</span>
         </label>
         <input
@@ -124,29 +124,29 @@ export function NewProjectForm() {
           value={nome}
           onChange={(e) => setNome(e.target.value)}
           placeholder="Ex: Construção de UBS — Edital 001/2025"
-          className="w-full h-9 rounded-md border border-[#2A2A2A] bg-[#0A0A0A] px-3 text-sm text-[#FAFAFA] placeholder:text-[#666666] focus:outline-none focus:ring-1 focus:ring-amber-500"
+          className="w-full h-9 rounded-md border border-[var(--border-base)] bg-[var(--bg-base)] px-3 text-sm text-[var(--fg-base)] placeholder:text-[var(--fg-faint)] focus:outline-none focus:ring-1 focus:ring-amber-500"
           disabled={loading}
         />
       </div>
 
       {/* Description */}
       <div>
-        <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
-          Descrição <span className="text-[#666666] font-normal">(opcional)</span>
+        <label className="block text-sm font-medium text-[var(--fg-base)] mb-1.5">
+          Descrição <span className="text-[var(--fg-faint)] font-normal">(opcional)</span>
         </label>
         <textarea
           value={descricao}
           onChange={(e) => setDescricao(e.target.value)}
           placeholder="Breve descrição do projeto ou observações relevantes"
           rows={3}
-          className="w-full rounded-md border border-[#2A2A2A] bg-[#0A0A0A] px-3 py-2 text-sm text-[#FAFAFA] placeholder:text-[#666666] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
+          className="w-full rounded-md border border-[var(--border-base)] bg-[var(--bg-base)] px-3 py-2 text-sm text-[var(--fg-base)] placeholder:text-[var(--fg-faint)] focus:outline-none focus:ring-1 focus:ring-amber-500 resize-none"
           disabled={loading}
         />
       </div>
 
       {/* AI Provider */}
       <div>
-        <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
+        <label className="block text-sm font-medium text-[var(--fg-base)] mb-1.5">
           Modelo de IA
         </label>
         <Select
@@ -162,16 +162,16 @@ export function NewProjectForm() {
             <SelectItem value="openai">GPT-4o (OpenAI)</SelectItem>
           </SelectContent>
         </Select>
-        <p className="text-xs text-[#666666] mt-1.5">
+        <p className="text-xs text-[var(--fg-faint)] mt-1.5">
           O modelo será usado para analisar o edital e gerar o orçamento
         </p>
       </div>
 
       {/* File Upload */}
       <div>
-        <label className="block text-sm font-medium text-[#FAFAFA] mb-1.5">
+        <label className="block text-sm font-medium text-[var(--fg-base)] mb-1.5">
           Carta Convite / Documentos{' '}
-          <span className="text-[#666666] font-normal">(opcional — pode enviar depois)</span>
+          <span className="text-[var(--fg-faint)] font-normal">(opcional — pode enviar depois)</span>
         </label>
 
         {/* Drop zone */}
@@ -183,15 +183,15 @@ export function NewProjectForm() {
           className={`rounded-xl border-2 border-dashed cursor-pointer transition-all p-6 text-center ${
             isDragging
               ? 'border-amber-500 bg-amber-500/5'
-              : 'border-[#2A2A2A] hover:border-amber-500/50 hover:bg-[#111111]'
+              : 'border-[var(--border-base)] hover:border-amber-500/50 hover:bg-[var(--bg-surface)]'
           }`}
         >
-          <Upload className="w-7 h-7 text-[#A3A3A3] mx-auto mb-2" />
-          <p className="text-sm text-[#A3A3A3]">
+          <Upload className="w-7 h-7 text-[var(--fg-muted)] mx-auto mb-2" />
+          <p className="text-sm text-[var(--fg-muted)]">
             Arraste arquivos aqui ou{' '}
             <span className="text-amber-400 font-medium">clique para selecionar</span>
           </p>
-          <p className="text-xs text-[#666666] mt-1">
+          <p className="text-xs text-[var(--fg-faint)] mt-1">
             PDF · DOCX · PPTX · MSG · EML · XLSX · TXT · ZIP — múltiplos arquivos
           </p>
           <input
@@ -217,14 +217,14 @@ export function NewProjectForm() {
               >
                 <FileText className="w-4 h-4 text-amber-400 flex-shrink-0" />
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-[#FAFAFA] truncate">{f.name}</div>
-                  <div className="text-[10px] text-[#666666]">{formatSize(f.size)}</div>
+                  <div className="text-xs font-medium text-[var(--fg-base)] truncate">{f.name}</div>
+                  <div className="text-[10px] text-[var(--fg-faint)]">{formatSize(f.size)}</div>
                 </div>
                 <button
                   type="button"
                   onClick={() => removeFile(f.name)}
                   disabled={loading}
-                  className="text-[#666666] hover:text-[#A3A3A3] transition-colors flex-shrink-0"
+                  className="text-[var(--fg-faint)] hover:text-[var(--fg-muted)] transition-colors flex-shrink-0"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>

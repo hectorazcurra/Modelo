@@ -148,18 +148,18 @@ export function WorkspaceClient({
   )
 
   return (
-    <div className="h-screen flex flex-col bg-[#0A0A0A] overflow-hidden">
+    <div className="h-screen flex flex-col bg-[var(--bg-base)] overflow-hidden">
       {/* Header */}
-      <header className="flex-shrink-0 border-b border-[#2A2A2A] bg-[#0A0A0A]/95 backdrop-blur-md px-4 h-14 flex items-center gap-3">
+      <header className="flex-shrink-0 border-b border-[var(--border-base)] bg-[var(--bg-base)]/95 backdrop-blur-md px-4 h-14 flex items-center gap-3">
         <Link
           href="/dashboard"
-          className="flex items-center gap-1.5 text-sm text-[#A3A3A3] hover:text-[#FAFAFA] transition-colors flex-shrink-0"
+          className="flex items-center gap-1.5 text-sm text-[var(--fg-muted)] hover:text-[var(--fg-base)] transition-colors flex-shrink-0"
         >
           <ArrowLeft className="w-4 h-4" />
           <span className="hidden sm:inline">Dashboard</span>
         </Link>
 
-        <div className="w-px h-4 bg-[#2A2A2A] flex-shrink-0" />
+        <div className="w-px h-4 bg-[var(--border-base)] flex-shrink-0" />
 
         <Link href="/" className="flex-shrink-0">
           <div className="w-7 h-7 rounded-md bg-amber-500 flex items-center justify-center">
@@ -170,7 +170,7 @@ export function WorkspaceClient({
         <div className="flex-1 min-w-0">
           <h1 className="text-sm font-semibold truncate">{projeto.nome}</h1>
           {pdfNome && (
-            <p className="text-xs text-[#A3A3A3] truncate flex items-center gap-1">
+            <p className="text-xs text-[var(--fg-muted)] truncate flex items-center gap-1">
               <FileText className="w-3 h-3 text-amber-400" />
               {pdfNome}
             </p>
@@ -181,7 +181,7 @@ export function WorkspaceClient({
           <Badge className={statusColor(projeto.status as StatusProjeto)}>
             {statusLabel(projeto.status as StatusProjeto)}
           </Badge>
-          <span className="hidden sm:flex items-center gap-1 text-xs text-[#666666] border border-[#2A2A2A] rounded px-2 py-0.5">
+          <span className="hidden sm:flex items-center gap-1 text-xs text-[var(--fg-faint)] border border-[var(--border-base)] rounded px-2 py-0.5">
             <Settings2 className="w-3 h-3" />
             {projeto.aiProvider === 'claude' ? 'Claude' : 'GPT-4o'}
           </span>
@@ -191,9 +191,9 @@ export function WorkspaceClient({
       {/* Split screen */}
       <div className="flex-1 flex overflow-hidden">
         {/* Chat panel — 40% */}
-        <div className="w-[40%] min-w-[300px] flex flex-col border-r border-[#2A2A2A] overflow-hidden">
-          <div className="flex-shrink-0 px-4 py-2.5 border-b border-[#2A2A2A] bg-[#111111]">
-            <span className="text-xs font-medium text-[#A3A3A3] uppercase tracking-wider">
+        <div className="w-[40%] min-w-[300px] flex flex-col border-r border-[var(--border-base)] overflow-hidden">
+          <div className="flex-shrink-0 px-4 py-2.5 border-b border-[var(--border-base)] bg-[var(--bg-surface)]">
+            <span className="text-xs font-medium text-[var(--fg-muted)] uppercase tracking-wider">
               Chat
             </span>
           </div>
@@ -214,12 +214,12 @@ export function WorkspaceClient({
 
         {/* Orcamento panel — 60% */}
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 px-4 py-2.5 border-b border-[#2A2A2A] bg-[#111111] flex items-center justify-between">
-            <span className="text-xs font-medium text-[#A3A3A3] uppercase tracking-wider">
+          <div className="flex-shrink-0 px-4 py-2.5 border-b border-[var(--border-base)] bg-[var(--bg-surface)] flex items-center justify-between">
+            <span className="text-xs font-medium text-[var(--fg-muted)] uppercase tracking-wider">
               Orçamento
             </span>
             {orcamento && (
-              <span className="text-xs text-[#666666]">v{orcamento.versao}</span>
+              <span className="text-xs text-[var(--fg-faint)]">v{orcamento.versao}</span>
             )}
           </div>
           <div className="flex-1 overflow-hidden">
