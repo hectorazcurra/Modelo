@@ -76,14 +76,14 @@ export function ChatInput({ onSend, isLoading, onUpload, isUploading }: ChatInpu
           {pendingFiles.map((f) => (
             <div
               key={f.name}
-              className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 pl-2.5 pr-1.5 py-0.5 text-xs text-amber-300"
+              className="flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 pl-2.5 pr-1.5 py-0.5 text-xs text-[var(--accent-text)]"
             >
               <FileText className="w-3 h-3 flex-shrink-0" />
               <span className="max-w-[140px] truncate">{f.name}</span>
               <button
                 type="button"
                 onClick={() => setPendingFiles((p) => p.filter((x) => x.name !== f.name))}
-                className="text-amber-400/60 hover:text-amber-400"
+                className="text-[var(--accent-text)]/60 hover:text-[var(--accent-text)]"
               >
                 <X className="w-3 h-3" />
               </button>
@@ -101,7 +101,7 @@ export function ChatInput({ onSend, isLoading, onUpload, isUploading }: ChatInpu
               disabled={busy}
               onClick={() => fileInputRef.current?.click()}
               title="Anexar arquivos"
-              className="flex-shrink-0 w-9 h-9 rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--fg-faint)] hover:text-amber-400 hover:border-amber-500/40 transition-colors disabled:opacity-40"
+              className="flex-shrink-0 w-9 h-9 rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] flex items-center justify-center text-[var(--fg-faint)] hover:text-[var(--accent-text)] hover:border-amber-500/40 transition-colors disabled:opacity-40"
             >
               {isUploading ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

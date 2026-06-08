@@ -27,6 +27,11 @@
   --border-base: #e5e7eb;
   --accent: #f59e0b;
   --accent-hover: #d97706;
+  /* Cor de texto "destaque" — substitui text-amber-400 quando ele é usado em
+   * elementos textuais (números, labels). No light fica cinza-escuro p/
+   * legibilidade; no dark mantém o amber tradicional. bg-amber-* e
+   * border-amber-* (botões, bordas sutis) seguem em amber nos dois temas. */
+  --accent-text: #0f172a;
 }
 
 .dark {
@@ -40,6 +45,7 @@
   --border-base: #2a2a2a;
   --accent: #f59e0b;
   --accent-hover: #fbbf24;
+  --accent-text: #fbbf24;
 }
 
 @theme inline {

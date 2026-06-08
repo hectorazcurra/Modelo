@@ -46,7 +46,7 @@ export function Features() {
         <div className="text-center mb-14">
           <h2 className="text-3xl md:text-4xl font-bold mb-4">
             Tudo que você precisa para{' '}
-            <span className="text-amber-400">vencer licitações</span>
+            <span className="text-[var(--accent-text)]">vencer licitações</span>
           </h2>
           <p className="text-[var(--fg-muted)] text-lg max-w-xl mx-auto">
             Da leitura do edital à proposta final, em uma única plataforma.
@@ -59,10 +59,10 @@ export function Features() {
             return (
               <div
                 key={feature.title}
-                className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] p-6 hover:border-amber-500/30 hover:bg-[#131313] transition-colors group"
+                className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] p-6 hover:border-amber-500/30 hover:bg-[var(--bg-elev-strong)] transition-colors group"
               >
                 <div className="w-10 h-10 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4 group-hover:bg-amber-500/15 transition-colors">
-                  <Icon className="w-5 h-5 text-amber-400" />
+                  <Icon className="w-5 h-5 text-[var(--accent-text)]" />
                 </div>
                 <h3 className="font-semibold text-[var(--fg-base)] mb-2">{feature.title}</h3>
                 <p className="text-sm text-[var(--fg-muted)] leading-relaxed">{feature.description}</p>

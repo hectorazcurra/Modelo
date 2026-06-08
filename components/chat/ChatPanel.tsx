@@ -61,8 +61,8 @@ export function ChatPanel({
       {isDragging && (
         <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg border-2 border-dashed border-amber-500 bg-amber-500/5 pointer-events-none">
           <div className="text-center">
-            <Upload className="w-10 h-10 text-amber-400 mx-auto mb-2" />
-            <p className="text-sm font-medium text-amber-400">Solte os arquivos aqui</p>
+            <Upload className="w-10 h-10 text-[var(--accent-text)] mx-auto mb-2" />
+            <p className="text-sm font-medium text-[var(--accent-text)]">Solte os arquivos aqui</p>
           </div>
         </div>
       )}
@@ -72,7 +72,7 @@ export function ChatPanel({
         {messages.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-center px-6 py-8">
             <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mb-4">
-              <Bot className="w-6 h-6 text-amber-400" />
+              <Bot className="w-6 h-6 text-[var(--accent-text)]" />
             </div>
             <h3 className="font-medium text-[var(--fg-base)] mb-2">Assistente de Orçamentos</h3>
 
@@ -84,7 +84,7 @@ export function ChatPanel({
                 <button
                   onClick={onAnalyze}
                   disabled={isLoading || isUploading}
-                  className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-amber-400 hover:bg-amber-500/15 transition-colors disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-2 text-sm text-[var(--accent-text)] hover:bg-amber-500/15 transition-colors disabled:opacity-50"
                 >
                   <Bot className="w-4 h-4" />
                   Analisar com IA
@@ -106,7 +106,7 @@ export function ChatPanel({
         {isLoading && (messages.length === 0 || messages[messages.length - 1]?.role !== 'assistant') && (
           <div className="flex items-start gap-3">
             <div className="w-7 h-7 rounded-full bg-amber-500/20 border border-amber-500/30 flex items-center justify-center flex-shrink-0 mt-0.5">
-              <Bot className="w-3.5 h-3.5 text-amber-400" />
+              <Bot className="w-3.5 h-3.5 text-[var(--accent-text)]" />
             </div>
             <div className="bg-[var(--bg-elev)] border border-[var(--border-base)] rounded-2xl rounded-tl-sm px-4 py-3">
               <div className="flex gap-1">
@@ -214,7 +214,7 @@ function ChatMessage({ message }: { message: UIMessage }) {
         {isUser ? (
           <User className="w-3.5 h-3.5 text-blue-400" />
         ) : (
-          <Bot className="w-3.5 h-3.5 text-amber-400" />
+          <Bot className="w-3.5 h-3.5 text-[var(--accent-text)]" />
         )}
       </div>
       <div

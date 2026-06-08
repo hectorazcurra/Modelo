@@ -171,7 +171,7 @@ export function WorkspaceClient({
           <h1 className="text-sm font-semibold truncate">{projeto.nome}</h1>
           {pdfNome && (
             <p className="text-xs text-[var(--fg-muted)] truncate flex items-center gap-1">
-              <FileText className="w-3 h-3 text-amber-400" />
+              <FileText className="w-3 h-3 text-[var(--accent-text)]" />
               {pdfNome}
             </p>
           )}

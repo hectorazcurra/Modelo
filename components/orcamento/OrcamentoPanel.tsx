@@ -278,7 +278,7 @@ export function OrcamentoPanel({
             ) : (
               <>
                 {pendingCount > 0 && (
-                  <span className="text-xs text-amber-400/70">
+                  <span className="text-xs text-[var(--accent-text)]/70">
                     {pendingCount} pendente{pendingCount !== 1 ? 's' : ''}
                   </span>
                 )}
@@ -286,7 +286,7 @@ export function OrcamentoPanel({
                   onClick={onAprovar}
                   disabled={pendingCount > 0 || saving}
                   title={pendingCount > 0 ? `${pendingCount} linha(s) ainda não revisada(s)` : undefined}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-amber-400 hover:bg-amber-500/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/30 bg-amber-500/10 px-3 py-1 text-xs text-[var(--accent-text)] hover:bg-amber-500/15 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 >
                   <CheckCircle2 className="w-3 h-3" />
                   Aprovar
@@ -300,9 +300,9 @@ export function OrcamentoPanel({
         {localDados.semReferencia && (
           <div className="rounded-xl border border-amber-500/40 bg-amber-500/10 p-4">
             <div className="flex items-start gap-2">
-              <span className="text-amber-400 text-base leading-none mt-0.5">⚠️</span>
+              <span className="text-[var(--accent-text)] text-base leading-none mt-0.5">⚠️</span>
               <div className="text-sm">
-                <div className="font-semibold text-amber-400 mb-1">
+                <div className="font-semibold text-[var(--accent-text)] mb-1">
                   Sem histórico comparável para este tipo de serviço
                 </div>
                 <p className="text-[var(--fg-muted)] leading-relaxed">
@@ -319,7 +319,7 @@ export function OrcamentoPanel({
         {/* #2 — Contexto do pedido do cliente */}
         {localDados.resumo.contexto && (
           <div className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-elev-strong)] p-4">
-            <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider mb-1.5">
+            <div className="text-xs font-semibold text-[var(--accent-text)]/80 uppercase tracking-wider mb-1.5">
               Contexto do pedido
             </div>
             <p className="text-sm text-[var(--fg-muted)] leading-relaxed">
@@ -333,7 +333,7 @@ export function OrcamentoPanel({
           <div className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-elev-strong)] p-4">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider mb-1">
+                <div className="text-xs font-semibold text-[var(--accent-text)]/80 uppercase tracking-wider mb-1">
                   Tipologia da demanda
                 </div>
                 <p className="text-[11px] text-[var(--fg-faint)] leading-relaxed">
@@ -386,7 +386,7 @@ export function OrcamentoPanel({
               <div className="flex items-center justify-between pt-3 border-t border-amber-500/20">
                 <div>
                   <div className="text-xs text-[var(--fg-muted)] mb-0.5">Valor a orçar (cobrança ao cliente)</div>
-                  <div className="text-2xl font-bold text-amber-400">{formatCurrency(pVenda)}</div>
+                  <div className="text-2xl font-bold text-[var(--accent-text)]">{formatCurrency(pVenda)}</div>
                   <div className="text-[11px] text-[var(--fg-faint)] mt-0.5">
                     = {formatCurrency(cTot)} + {vPerc.toFixed(2)}%
                   </div>
@@ -427,7 +427,7 @@ export function OrcamentoPanel({
             <ul className="space-y-1">
               {localDados.escopo.map((item, i) => (
                 <li key={i} className="flex items-start gap-2 text-sm text-[var(--fg-muted)]">
-                  <span className="text-amber-400 mt-0.5">•</span>
+                  <span className="text-[var(--accent-text)] mt-0.5">•</span>
                   <span>{item}</span>
                 </li>
               ))}
@@ -445,7 +445,7 @@ export function OrcamentoPanel({
                   .filter((i) => i >= 0)
                 return (
                   <div key={cat}>
-                    <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider mb-1.5">
+                    <div className="text-xs font-semibold text-[var(--accent-text)]/80 uppercase tracking-wider mb-1.5">
                       {cat}
                     </div>
                     <div className="space-y-0.5">
@@ -473,7 +473,7 @@ export function OrcamentoPanel({
               })}
               <div className="flex justify-between pt-2 border-t border-[var(--border-base)]">
                 <span className="text-sm font-semibold text-[var(--fg-base)]">Total Materiais</span>
-                <span className="text-sm font-bold text-amber-400">
+                <span className="text-sm font-bold text-[var(--accent-text)]">
                   {formatCurrency(
                     localDados.totalMateriais || localDados.itens.reduce((a, i) => a + i.total, 0)
                   )}
@@ -498,7 +498,7 @@ export function OrcamentoPanel({
                   <div key={equipe || `_${gi}`}>
                     {equipe && (
                       <div className="flex items-center justify-between mb-1.5">
-                        <div className="text-xs font-semibold text-amber-400/80 uppercase tracking-wider">
+                        <div className="text-xs font-semibold text-[var(--accent-text)]/80 uppercase tracking-wider">
                           {equipe}
                           <span className="ml-1.5 text-[10px] text-[var(--fg-faint)] normal-case">
                             ({cargos} {cargos === 1 ? 'cargo' : 'cargos'}
@@ -536,7 +536,7 @@ export function OrcamentoPanel({
 
               <div className="flex justify-between pt-2 border-t border-[var(--border-base)]">
                 <span className="text-sm font-semibold text-[var(--fg-base)]">Total Mão de Obra</span>
-                <span className="text-sm font-bold text-amber-400">
+                <span className="text-sm font-bold text-[var(--accent-text)]">
                   {formatCurrency(
                     localDados.totalMaoDeObra ||
                       localDados.maoDeObra.reduce((a, i) => a + i.total, 0)
@@ -613,7 +613,7 @@ function ItemLine({
 
         <span
           className={`flex-1 pr-1 leading-tight ${
-            item.semHistorico ? 'text-amber-400/80' : 'text-[var(--fg-muted)]'
+            item.semHistorico ? 'text-[var(--accent-text)]/80' : 'text-[var(--fg-muted)]'
           }`}
         >
           {item.semHistorico && '⚠️ '}
@@ -670,7 +670,7 @@ function ItemLine({
                 <button
                   onClick={onStartEdit}
                   title="Editar valor"
-                  className="p-0.5 rounded text-amber-400/60 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                  className="p-0.5 rounded text-[var(--accent-text)]/60 hover:text-[var(--accent-text)] hover:bg-amber-400/10 transition-colors"
                 >
                   <Pencil className="w-3 h-3" />
                 </button>
@@ -687,7 +687,7 @@ function ItemLine({
                 const os = item.fonteOs ?? extractOs(item.fonte ?? '')
                 if (os) onOpenModal(os)
               }}
-              className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-faint)] hover:text-amber-400/80 transition-colors"
+              className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-faint)] hover:text-[var(--accent-text)]/80 transition-colors"
             >
               <Info className="w-2.5 h-2.5" />
               {item.fonte}
@@ -756,12 +756,12 @@ function MdoLine({
 
         <span
           className={`flex-1 pr-1 leading-tight ${
-            item.semHistorico ? 'text-amber-400/80' : 'text-[var(--fg-muted)]'
+            item.semHistorico ? 'text-[var(--accent-text)]/80' : 'text-[var(--fg-muted)]'
           }`}
         >
           {item.semHistorico && '⚠️ '}
           {item.qtd > 1 && (
-            <span className="inline-flex items-center justify-center min-w-[1.25rem] px-1 mr-1 rounded text-[10px] font-bold text-amber-400 bg-amber-500/10 border border-amber-500/20 align-middle">
+            <span className="inline-flex items-center justify-center min-w-[1.25rem] px-1 mr-1 rounded text-[10px] font-bold text-[var(--accent-text)] bg-amber-500/10 border border-amber-500/20 align-middle">
               {item.qtd}×
             </span>
           )}
@@ -830,7 +830,7 @@ function MdoLine({
                 <button
                   onClick={onStartEdit}
                   title="Editar valor"
-                  className="p-0.5 rounded text-amber-400/60 hover:text-amber-400 hover:bg-amber-400/10 transition-colors"
+                  className="p-0.5 rounded text-[var(--accent-text)]/60 hover:text-[var(--accent-text)] hover:bg-amber-400/10 transition-colors"
                 >
                   <Pencil className="w-3 h-3" />
                 </button>
@@ -847,7 +847,7 @@ function MdoLine({
                 const os = item.fonteOs ?? extractOs(item.fonte ?? '')
                 if (os) onOpenModal(os)
               }}
-              className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-faint)] hover:text-amber-400/80 transition-colors"
+              className="inline-flex items-center gap-1 text-[10px] text-[var(--fg-faint)] hover:text-[var(--accent-text)]/80 transition-colors"
             >
               <Info className="w-2.5 h-2.5" />
               {item.fonte}
@@ -888,7 +888,7 @@ function AddMdoForm({
       <button
         onClick={() => setOpen(true)}
         disabled={disabled}
-        className="mt-1 inline-flex items-center gap-1 text-xs text-amber-400/70 hover:text-amber-400 transition-colors disabled:opacity-40"
+        className="mt-1 inline-flex items-center gap-1 text-xs text-[var(--accent-text)]/70 hover:text-[var(--accent-text)] transition-colors disabled:opacity-40"
       >
         <span className="text-sm leading-none">+</span> Adicionar linha
       </button>
@@ -988,7 +988,7 @@ function BdiEditor({
           value={bdi.modalidade}
           disabled={disabled}
           onChange={(e) => onModalidade(e.target.value as 'empreitada' | 'administracao')}
-          className="bg-[var(--bg-base)] border border-[var(--border-base)] hover:border-amber-500/40 rounded px-2 py-1 text-xs text-amber-400 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+          className="bg-[var(--bg-base)] border border-[var(--border-base)] hover:border-amber-500/40 rounded px-2 py-1 text-xs text-[var(--accent-text)] focus:outline-none focus:border-amber-400 disabled:opacity-50"
         >
           <option value="empreitada">Empreitada</option>
           <option value="administracao">Administração</option>
@@ -1005,13 +1005,13 @@ function BdiEditor({
       </div>
       <div className="flex items-center justify-between text-sm pt-1 border-t border-amber-500/10">
         <span className="text-[var(--fg-muted)]">BDI calculado</span>
-        <span className="font-semibold text-amber-400">{bdi.bdiCalculado.toFixed(2)}%</span>
+        <span className="font-semibold text-[var(--accent-text)]">{bdi.bdiCalculado.toFixed(2)}%</span>
       </div>
 
       <button
         type="button"
         onClick={() => setShowAvancado((v) => !v)}
-        className="flex items-center gap-1 text-[11px] text-[var(--fg-faint)] hover:text-amber-400 transition-colors"
+        className="flex items-center gap-1 text-[11px] text-[var(--fg-faint)] hover:text-[var(--accent-text)] transition-colors"
       >
         {showAvancado ? (
           <ChevronUp className="w-3 h-3" />
@@ -1023,7 +1023,7 @@ function BdiEditor({
 
       {showAvancado && (
         <div className="space-y-2 pt-1 pl-1 border-l border-amber-500/10">
-          <div className="text-[10px] uppercase tracking-wider text-amber-400/60 mt-1">Margem</div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--accent-text)]/60 mt-1">Margem</div>
           {bdi.margemComponentes.map((c, i) => (
             <BdiComponentRow
               key={`m${i}`}
@@ -1033,7 +1033,7 @@ function BdiEditor({
               onCommit={(v) => setComponent('margem', i, v)}
             />
           ))}
-          <div className="text-[10px] uppercase tracking-wider text-amber-400/60 mt-2">Impostos</div>
+          <div className="text-[10px] uppercase tracking-wider text-[var(--accent-text)]/60 mt-2">Impostos</div>
           {bdi.impostosComponentes.length > 0 ? (
             bdi.impostosComponentes.map((c, i) => (
               <BdiComponentRow
@@ -1106,7 +1106,7 @@ function NumberInput({
           if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
           if (e.key === 'Escape') { setDraft(String(value)); (e.target as HTMLInputElement).blur() }
         }}
-        className={`${compact ? 'w-16' : 'w-20'} bg-[var(--bg-base)] border border-amber-500/30 rounded px-2 py-0.5 text-right text-sm text-amber-400 focus:outline-none focus:border-amber-400 disabled:opacity-50`}
+        className={`${compact ? 'w-16' : 'w-20'} bg-[var(--bg-base)] border border-amber-500/30 rounded px-2 py-0.5 text-right text-sm text-[var(--accent-text)] focus:outline-none focus:border-amber-400 disabled:opacity-50`}
       />
       {suffix && <span className="text-[var(--fg-faint)] text-xs">{suffix}</span>}
     </span>
@@ -1144,11 +1144,11 @@ function VariacaoEditor({
         type="button"
         disabled={disabled}
         onClick={() => setEditing(true)}
-        className="group inline-flex items-center gap-1.5 font-semibold text-amber-400 disabled:opacity-50"
+        className="group inline-flex items-center gap-1.5 font-semibold text-[var(--accent-text)] disabled:opacity-50"
         title="Editar variação"
       >
         +{value.toFixed(1)}%
-        <Pencil className="w-3 h-3 text-[var(--fg-faint)] group-hover:text-amber-400" />
+        <Pencil className="w-3 h-3 text-[var(--fg-faint)] group-hover:text-[var(--accent-text)]" />
       </button>
     )
   }
@@ -1167,7 +1167,7 @@ function VariacaoEditor({
           if (e.key === 'Enter') commit()
           if (e.key === 'Escape') setEditing(false)
         }}
-        className="w-20 bg-[var(--bg-base)] border border-amber-500/40 rounded px-2 py-0.5 text-right text-sm text-amber-400 focus:outline-none focus:border-amber-400"
+        className="w-20 bg-[var(--bg-base)] border border-amber-500/40 rounded px-2 py-0.5 text-right text-sm text-[var(--accent-text)] focus:outline-none focus:border-amber-400"
       />
       <span className="text-[var(--fg-faint)] text-sm">%</span>
     </span>
@@ -1196,7 +1196,7 @@ function TipologiaEditor({
       value={value || ''}
       disabled={disabled}
       onChange={(e) => onCommit(e.target.value)}
-      className="bg-[var(--bg-base)] border border-[var(--border-base)] hover:border-amber-500/40 rounded px-2 py-1 text-xs text-amber-400 focus:outline-none focus:border-amber-400 disabled:opacity-50"
+      className="bg-[var(--bg-base)] border border-[var(--border-base)] hover:border-amber-500/40 rounded px-2 py-1 text-xs text-[var(--accent-text)] focus:outline-none focus:border-amber-400 disabled:opacity-50"
     >
       <option value="" disabled>
         Selecione…
@@ -1239,7 +1239,7 @@ function Section({
         className="w-full flex items-center justify-between px-4 py-3 text-sm font-medium text-[var(--fg-base)] hover:bg-[var(--bg-elev)] transition-colors"
       >
         <div className="flex items-center gap-2">
-          {icon && <span className="text-amber-400">{icon}</span>}
+          {icon && <span className="text-[var(--accent-text)]">{icon}</span>}
           {title}
         </div>
         {open ? (
@@ -1258,7 +1258,7 @@ function CronogramaRow({ fase }: { fase: FaseCronograma }) {
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="text-[var(--fg-base)]">{fase.fase}</span>
-        <span className="text-amber-400 font-medium">{fase.percentual}%</span>
+        <span className="text-[var(--accent-text)] font-medium">{fase.percentual}%</span>
       </div>
       <div className="h-1.5 rounded-full bg-[var(--bg-elev)] overflow-hidden">
         <div

@@ -17,14 +17,14 @@ export function Hero() {
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none" />
 
       <div className="relative max-w-5xl mx-auto text-center">
-        <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-sm text-amber-400 mb-8">
+        <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-4 py-1.5 text-sm text-[var(--accent-text)] mb-8">
           <Sparkles className="w-3.5 h-3.5" />
           <span>IA integrada com Claude e GPT-4o</span>
         </div>
 
         <h1 className="text-5xl md:text-7xl font-bold tracking-tight mb-6 leading-none">
           Orçamentos de obras{' '}
-          <span className="text-amber-400">inteligentes</span>
+          <span className="text-[var(--accent-text)]">inteligentes</span>
         </h1>
 
         <p className="text-lg md:text-xl text-[var(--fg-muted)] max-w-2xl mx-auto mb-10 leading-relaxed">

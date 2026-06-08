@@ -63,7 +63,7 @@ export default async function DashboardPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-10">
           <Card>
             <CardContent className="pt-6">
-              <div className="text-2xl font-bold text-amber-400">{projetos.length}</div>
+              <div className="text-2xl font-bold text-[var(--accent-text)]">{projetos.length}</div>
               <div className="text-xs text-[var(--fg-muted)] mt-0.5">Total de Projetos</div>
             </CardContent>
           </Card>
@@ -112,9 +112,9 @@ export default async function DashboardPage() {
                   href={`/projetos/${projeto.id}`}
                   className="block group"
                 >
-                  <div className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] p-5 hover:border-amber-500/30 hover:bg-[#131313] transition-all flex items-center gap-5">
+                  <div className="rounded-xl border border-[var(--border-base)] bg-[var(--bg-surface)] p-5 hover:border-amber-500/30 hover:bg-[var(--bg-elev-strong)] transition-all flex items-center gap-5">
                     <div className="w-10 h-10 rounded-lg bg-[var(--bg-elev)] border border-[var(--border-base)] flex items-center justify-center flex-shrink-0">
-                      <FileText className="w-5 h-5 text-amber-400" />
+                      <FileText className="w-5 h-5 text-[var(--accent-text)]" />
                     </div>
 
                     <div className="flex-1 min-w-0">
@@ -128,14 +128,14 @@ export default async function DashboardPage() {
                         <span>Atualizado {formatDate(projeto.atualizadoEm)}</span>
                         <span>{projeto._count.mensagens} mensagens</span>
                         {projeto.pdfNome && (
-                          <span className="text-amber-400/70">{projeto.pdfNome}</span>
+                          <span className="text-[var(--accent-text)]/70">{projeto.pdfNome}</span>
                         )}
                       </div>
                     </div>
 
                     <div className="text-right flex-shrink-0">
                       {dados?.totalGeral ? (
-                        <div className="font-semibold text-amber-400">
+                        <div className="font-semibold text-[var(--accent-text)]">
                           {formatCurrency(dados.totalGeral)}
                         </div>
                       ) : (
@@ -146,7 +146,7 @@ export default async function DashboardPage() {
                       </div>
                     </div>
 
-                    <ArrowRight className="w-4 h-4 text-[var(--fg-muted)] group-hover:text-amber-400 transition-colors flex-shrink-0" />
+                    <ArrowRight className="w-4 h-4 text-[var(--fg-muted)] group-hover:text-[var(--accent-text)] transition-colors flex-shrink-0" />
                   </div>
                 </Link>
               )

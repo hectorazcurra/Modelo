@@ -189,7 +189,7 @@ export function NewProjectForm() {
           <Upload className="w-7 h-7 text-[var(--fg-muted)] mx-auto mb-2" />
           <p className="text-sm text-[var(--fg-muted)]">
             Arraste arquivos aqui ou{' '}
-            <span className="text-amber-400 font-medium">clique para selecionar</span>
+            <span className="text-[var(--accent-text)] font-medium">clique para selecionar</span>
           </p>
           <p className="text-xs text-[var(--fg-faint)] mt-1">
             PDF · DOCX · PPTX · MSG · EML · XLSX · TXT · ZIP — múltiplos arquivos
@@ -215,7 +215,7 @@ export function NewProjectForm() {
                 key={f.name}
                 className="flex items-center gap-2.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2"
               >
-                <FileText className="w-4 h-4 text-amber-400 flex-shrink-0" />
+                <FileText className="w-4 h-4 text-[var(--accent-text)] flex-shrink-0" />
                 <div className="flex-1 min-w-0">
                   <div className="text-xs font-medium text-[var(--fg-base)] truncate">{f.name}</div>
                   <div className="text-[10px] text-[var(--fg-faint)]">{formatSize(f.size)}</div>

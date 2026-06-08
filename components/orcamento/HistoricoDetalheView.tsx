@@ -219,7 +219,7 @@ export function HistoricoDetalheView({ os, dados: d, mode }: HistoricoDetalheVie
             href={`/projetos-historicos/${encodeURIComponent(os)}`}
             target="_blank"
             rel="noopener noreferrer"
-            className="inline-flex items-center gap-1.5 text-xs text-amber-400 hover:text-amber-300 transition-colors"
+            className="inline-flex items-center gap-1.5 text-xs text-[var(--accent-text)] hover:text-[var(--accent-text)] transition-colors"
           >
             Ver projeto completo
             <ExternalLink className="w-3 h-3" />
@@ -244,7 +244,7 @@ function hasFinancial(d: HistoricoDados): boolean {
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold text-amber-400/80 uppercase tracking-wider mb-2">
+      <div className="text-[10px] font-semibold text-[var(--accent-text)]/80 uppercase tracking-wider mb-2">
         {title}
       </div>
       {children}
@@ -285,7 +285,7 @@ function TextExcerpt({
 
   return (
     <details className="group">
-      <summary className="cursor-pointer text-[10px] font-semibold text-amber-400/80 uppercase tracking-wider mb-1 list-none flex items-center gap-1 hover:text-amber-400 transition-colors">
+      <summary className="cursor-pointer text-[10px] font-semibold text-[var(--accent-text)]/80 uppercase tracking-wider mb-1 list-none flex items-center gap-1 hover:text-[var(--accent-text)] transition-colors">
         <span className="group-open:hidden">▶</span>
         <span className="hidden group-open:inline">▼</span>
         {title}
