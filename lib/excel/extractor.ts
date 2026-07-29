@@ -644,6 +644,12 @@ export function readPricingWorkbook(filePath: string): XLSX.WorkBook {
   return XLSX.readFile(filePath, { cellDates: false, cellNF: false, cellFormula: false })
 }
 
+/** Same options as readPricingWorkbook, but for buffers held in memory
+ * (avoids the disk round-trip when we download from Graph). */
+export function readPricingWorkbookFromBuffer(buf: Buffer): XLSX.WorkBook {
+  return XLSX.read(buf, { type: 'buffer', cellDates: false, cellNF: false, cellFormula: false })
+}
+
 // Extract all text from a workbook as CSV per sheet (for non-Pricing files)
 export function extractWorkbookText(wb: XLSX.WorkBook): string {
   const parts: string[] = []

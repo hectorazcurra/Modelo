@@ -121,16 +121,14 @@ function norm(s: string): string {
 
 // ─── Read index from XLSX ─────────────────────────────────────────────────────
 
-function readIndexXlsx(filePath: string): IndexProjeto[] {
-  const wb = XLSX.readFile(filePath, { cellDates: false, raw: true })
-
+export function readIndexXlsxFromWorkbook(wb: XLSX.WorkBook, sourceLabel = 'in-memory'): IndexProjeto[] {
   const sheetName =
     wb.SheetNames.find((n) =>
       ['fup', 'projetos', 'dados', 'comercial', 'base'].some((k) => norm(n).includes(k))
     ) ?? wb.SheetNames[0]
 
   const sheet = wb.Sheets[sheetName]
-  if (!sheet) throw new Error(`Aba não encontrada no arquivo: ${filePath}`)
+  if (!sheet) throw new Error(`Aba não encontrada em ${sourceLabel}`)
 
   const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, defval: null, blankrows: false, raw: true })
 
@@ -190,6 +188,12 @@ function readIndexXlsx(filePath: string): IndexProjeto[] {
     })
   }
   return projetos
+}
+
+/** Disk-path variant kept for the current `main()` — thin wrapper. */
+function readIndexXlsx(filePath: string): IndexProjeto[] {
+  const wb = XLSX.readFile(filePath, { cellDates: false, raw: true })
+  return readIndexXlsxFromWorkbook(wb, filePath)
 }
 
 // ─── Folder helpers ───────────────────────────────────────────────────────────
@@ -442,8 +446,19 @@ function buildDados(rec: ImportRecord) {
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-async function main() {
-  const args = parseArgs()
+/** Programmatic entry point — the Graph script delegates here after mirroring
+ * the SharePoint subtree to a staging dir. Same shape as the CLI parsed args. */
+export interface RunImportArgs {
+  index: string
+  dir: string
+  dryRun?: boolean
+  limit?: number | null
+  os?: string | null
+  skipEmpty?: boolean
+  clean?: boolean
+}
+
+export async function runImport(args: RunImportArgs): Promise<void> {
   console.log(`Índice: ${args.index}`)
   console.log(`Diretório base: ${args.dir}`)
   console.log(`Modo: ${args.dryRun ? 'DRY-RUN' : 'GRAVAÇÃO'}`)
@@ -537,7 +552,12 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Erro fatal:', err)
-  process.exit(1)
-})
+// CLI shim — only runs when invoked directly (skipped when imported by
+// scripts/import-historico-o365.ts).
+if (require.main === module) {
+  const args = parseArgs()
+  runImport(args).catch((err) => {
+    console.error('Erro fatal:', err)
+    process.exit(1)
+  })
+}
