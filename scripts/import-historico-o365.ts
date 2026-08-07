@@ -54,6 +54,7 @@ interface CliArgs {
   limit: number | null
   clean: boolean
   skipEmpty: boolean
+  perOs: boolean
 }
 
 function parseArgs(): CliArgs {
@@ -72,6 +73,7 @@ function parseArgs(): CliArgs {
     limit: null,
     clean: false,
     skipEmpty: false,
+    perOs: false,
   }
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i]
@@ -88,6 +90,7 @@ function parseArgs(): CliArgs {
     else if (a === '--limit') args.limit = parseInt(argv[++i], 10)
     else if (a === '--clean') args.clean = true
     else if (a === '--skip-empty') args.skipEmpty = true
+    else if (a === '--per-os') args.perOs = true
   }
 
   const siteFromEnv = !!(process.env.MS_GRAPH_SITE_ID && process.env.MS_GRAPH_DRIVE_ID)
@@ -213,16 +216,63 @@ async function main() {
   console.log()
 
   // 4) Baixa cada pasta que bate um dos prefixos/nomes esperados.
+  // Modo padrão: baixa TUDO, depois delega runImport uma vez (rápido mas
+  // pode encher o disco). Modo `--per-os`: baixa 1 pasta → runImport SÓ
+  // essa OS → apaga staging da OS → próxima. Mantém uso de disco em
+  // ~1 OS (~150 MB típico) em vez de acumular GB.
   let matched = 0
   const totalStats = { files: 0, bytes: 0, skipped: 0 }
-  for (const child of rootChildren) {
-    if (!child.folder) continue
+  const matchingChildren = rootChildren.filter((child) => {
+    if (!child.folder) return false
     const nameLc = child.name.toLowerCase()
-    const isExpected =
+    return (
       expectedNames.has(nameLc) ||
       [...expectedPrefixes].some((os) => nameLc === os || nameLc.startsWith(os + ' ') || nameLc.startsWith(os + '-') || nameLc.startsWith(os + '_'))
-    if (!isExpected) continue
+    )
+  })
 
+  if (args.perOs) {
+    console.log(`Modo streaming (--per-os): processa e apaga OS-por-OS.`)
+    console.log()
+    for (const child of matchingChildren) {
+      matched++
+      const dest = path.join(args.stagingDir, child.name)
+      fs.mkdirSync(dest, { recursive: true })
+      const stats = { files: 0, bytes: 0, skipped: 0 }
+      try {
+        await mirrorSubtree(client, driveId, child, dest, stats)
+        console.log(`  [${child.name}] baixado: ${stats.files} arqs / ${(stats.bytes / (1024 * 1024)).toFixed(1)} MB`)
+      } catch (err) {
+        console.error(`  [${child.name}] ERRO no mirror: ${err instanceof Error ? err.message : err}`)
+      }
+      // Extrai o OS do nome da pasta pra restringir o runImport a essa OS.
+      const osMatch = child.name.match(/^(2\d{3}-\d{3,4})/)
+      const osFilter = osMatch ? osMatch[1] : args.osPrefix
+      try {
+        await runImport({
+          index: localFupPath,
+          dir: args.stagingDir,
+          dryRun: args.dryRun,
+          limit: null,
+          os: osFilter,
+          skipEmpty: true,
+          clean: false,
+        })
+      } catch (err) {
+        console.error(`  [${child.name}] ERRO no runImport: ${err instanceof Error ? err.message : err}`)
+      }
+      // Cleanup imediato dessa OS pra liberar disco.
+      fs.rmSync(dest, { recursive: true, force: true })
+      totalStats.files += stats.files
+      totalStats.bytes += stats.bytes
+      totalStats.skipped += stats.skipped
+    }
+    console.log()
+    console.log(`Total: ${matched} pastas processadas | ${totalStats.files} arqs baixados | ${(totalStats.bytes / (1024 * 1024 * 1024)).toFixed(2)} GB (pico ~1 OS de cada vez)`)
+    return  // Já persistiu tudo; pula o runImport agregado abaixo.
+  }
+
+  for (const child of matchingChildren) {
     matched++
     const dest = path.join(args.stagingDir, child.name)
     fs.mkdirSync(dest, { recursive: true })
